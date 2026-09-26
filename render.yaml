@@ -1,0 +1,25 @@
+# ==============================================================================
+# DRISHTRA - Digital Reliability & Integrity Shield for Trusted AI
+# Render Cloud Deployment Blueprint (render.yaml)
+# Smart India Hackathon 2026 | Problem Statement: SIH26228
+# ==============================================================================
+
+services:
+  - type: web
+    name: drishtra-assurance-fabric
+    runtime: python
+    region: oregon
+    plan: free
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "PYTHONPATH=backend uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: ENVIRONMENT
+        value: render-demo
+      - key: IS_AIR_GAPPED
+        value: "true"
+      - key: DATABASE_URL
+        value: sqlite:///./drishtra_vault.db
+      - key: SECRET_KEY
+        generateValue: true
+      - key: BASE_STORAGE_DIR
+        value: ./storage

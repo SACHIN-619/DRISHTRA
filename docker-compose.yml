@@ -1,0 +1,23 @@
+version: '3.8'
+
+services:
+  drishtra-engine:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: drishtra-assurance-vault
+    environment:
+      - ENVIRONMENT=air-gapped-production
+      - IS_AIR_GAPPED=true
+      - PORT=8000
+      - DATABASE_URL=sqlite:///./storage/drishtra_vault.db
+      - SECRET_KEY=sovereign-defence-drishtra-2026-key
+    ports:
+      - "8000:8000"
+    volumes:
+      - drishtra-storage:/app/storage
+    restart: unless-stopped
+
+volumes:
+  drishtra-storage:
+    driver: local

@@ -1,0 +1,38 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Pytest / Cache
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Local Environment Variables & Secrets
+.env
+backend/.env
+*.local.env
+
+# Local Databases (Auto-generated on startup)
+*.db
+*.sqlite
+*.sqlite3
+
+# Dynamic Runtime Storage Artifacts
+storage/artifacts/*
+!storage/artifacts/.gitkeep
+storage/audit/*
+!storage/audit/.gitkeep
+storage/fixtures/*
+!storage/fixtures/.gitkeep
+storage/manifests/*
+!storage/manifests/.gitkeep
+backend/storage/
+
+# IDE & OS Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.log

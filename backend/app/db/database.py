@@ -9,10 +9,14 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from app.core.config import settings
 
+import re
+
 db_url = settings.DATABASE_URL.strip()
 
-# Normalize Neon / Heroku / AWS Postgres URLs from postgres:// to postgresql://
-if db_url.startswith("postgres://"):
+# Normalize Neon / Heroku / AWS Postgres URLs and accidental prefix typos (e.g. sqpostgresql://)
+if re.match(r"^sq+l*(ite)?postgres(ql)?://", db_url):
+    db_url = re.sub(r"^sq+l*(ite)?postgres(ql)?://", "postgresql://", db_url)
+elif db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
 if db_url.startswith("sqlite"):

@@ -15,7 +15,10 @@ from app.api.routes import (
 )
 
 # Initialize database schema
-Base.metadata.create_all(bind=engine)
+try:
+    Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"[!] Database schema initialization warning: {e}")
 
 app = FastAPI(
     title=f"{settings.PROJECT_NAME} Sovereign Assurance API",

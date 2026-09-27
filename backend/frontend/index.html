@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DRISHTRA | Sovereign AI Assurance Fabric</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Tactical Topbar -->
+    <header class="topbar">
+        <div class="brand">
+            <div class="logo-shield">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 2L3 7v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V7l-9-5z"/>
+                    <circle cx="12" cy="12" r="3" fill="#10b981"/>
+                </svg>
+            </div>
+            <div>
+                <div class="brand-title">DRISHTRA <span class="brand-badge">SOVEREIGN FABRIC</span></div>
+                <div class="brand-sub">India-First Offline AI Assurance | MoD / Indian Army (DGIS)</div>
+            </div>
+        </div>
+
+        <div class="topbar-center">
+            <div class="case-indicator">
+                <span class="indicator-dot pulse-emerald"></span>
+                <span>CASE: <strong id="active-case-name">CASE-2026-DRISHTRA-DEMO</strong></span>
+            </div>
+            <div class="airgap-badge">
+                <span class="lock-icon">🔒</span> OFFLINE MODE: ENABLED (Sovereign Vault)
+            </div>
+        </div>
+
+        <div class="topbar-actions">
+            <button id="btn-bootstrap" class="btn btn-primary" onclick="bootstrapDemo()">
+                <span class="btn-icon">⚡</span> Run Attack Simulation
+            </button>
+            <a href="/docs" target="_blank" class="btn btn-outline">
+                <span>API Docs</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Workspace -->
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <nav class="sidebar">
+            <div class="nav-section-title">ASSURANCE COMMAND</div>
+            <button class="nav-item active" onclick="switchTab('dashboard')">
+                <span class="nav-icon">📊</span> Mission Control
+            </button>
+            <button class="nav-item" onclick="switchTab('trace')">
+                <span class="nav-icon">🔍</span> Why Flagged? (Trace)
+            </button>
+            <button class="nav-item" onclick="switchTab('passport')">
+                <span class="nav-icon">🛡️</span> Assurance Passports
+            </button>
+            <button class="nav-item" onclick="switchTab('assurance')">
+                <span class="nav-icon">⚖️</span> Assurance Cases
+            </button>
+            <button class="nav-item" onclick="switchTab('lab')">
+                <span class="nav-icon">🧪</span> Demo Attack Lab (TP/FP)
+            </button>
+            <button class="nav-item" onclick="switchTab('artifacts')">
+                <span class="nav-icon">📦</span> Verifiable Artifacts (9)
+            </button>
+            <button class="nav-item" onclick="switchTab('audit')">
+                <span class="nav-icon">⛓️</span> Forensic Audit Ledger
+            </button>
+            <button class="nav-item" onclick="switchTab('factory')">
+                <span class="nav-icon">⚡</span> Attack Scenario Lab
+            </button>
+
+            <div class="nav-footer">
+                <div class="spec-label">SYSTEM TELEMETRY</div>
+                <div class="spec-row"><span>Classification:</span> <span class="badge-tag">RESTRICTED</span></div>
+                <div class="spec-row"><span>Crypto Standard:</span> <span>Ed25519 / SHA-256</span></div>
+                <div class="spec-row"><span>Policy Engine:</span> <span>AP-2026.1</span></div>
+                <div class="spec-row"><span>Local DB:</span> <span class="text-emerald">SQLite Sovereign</span></div>
+            </div>
+        </nav>
+
+        <!-- Dynamic Content Body -->
+        <main class="content-body">
+            <!-- TAB 1: MISSION CONTROL -->
+            <section id="tab-dashboard" class="tab-pane active">
+                <div class="pane-header">
+                    <h2>Mission Control // Supply Chain Integrity Overview</h2>
+                    <span class="status-pill status-quarantined" id="case-status-badge">STATUS: QUARANTINED</span>
+                </div>
+
+                <!-- High-Impact Stat Tiles -->
+                <div class="metrics-grid">
+                    <div class="metric-card">
+                        <div class="metric-title">SUPPLY CHAIN CONTRIBUTORS</div>
+                        <div class="metric-value text-sky" id="stat-contributors">3</div>
+                        <div class="metric-desc">1 Sovereign Lab | 1 Commercial | 1 Untrusted</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">PROTECTED DATASETS & MODELS</div>
+                        <div class="metric-value text-indigo" id="stat-assets">4</div>
+                        <div class="metric-desc">UVH-26 Split | B-221 | M-BASE | M-04</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">INTEGRITY FINDINGS DETECTED</div>
+                        <div class="metric-value text-amber" id="stat-findings">5</div>
+                        <div class="metric-desc">Duplicates | Conflicts | Trojan | Signature</div>
+                    </div>
+                    <div class="metric-card border-danger">
+                        <div class="metric-title">RECOMMENDED DISPOSITION</div>
+                        <div class="metric-value text-crimson" id="stat-disposition">QUARANTINE</div>
+                        <div class="metric-desc">Human Authorization Required</div>
+                    </div>
+                </div>
+
+                <!-- Core Split View: Inferences & Recent Findings -->
+                <div class="dashboard-grid">
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Attested Inference Records</h3>
+                            <span class="panel-tag">ED25519 BOUND</span>
+                        </div>
+                        <div class="table-container">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Inference ID</th>
+                                        <th>Target Class</th>
+                                        <th>Confidence</th>
+                                        <th>Input Digest</th>
+                                        <th>Status</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="inferences-table-body">
+                                    <!-- Populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <div class="panel">
+                        <div class="panel-header">
+                            <h3>Active Integrity Sentinel Findings</h3>
+                            <span class="panel-tag">COVERAGE VERIFIED</span>
+                        </div>
+                        <div class="findings-list" id="dashboard-findings-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: WHY FLAGGED (CENTERPIECE LINEAGE TRACE) -->
+            <section id="tab-trace" class="tab-pane">
+                <div class="pane-header">
+                    <div>
+                        <h2>Forensic Lineage Reconstruction // Why Was This Result Flagged?</h2>
+                        <p class="pane-sub">Reconstructs upstream dependency graph across Inference &rarr; Model &rarr; Dataset &rarr; Contributor with attached evidence.</p>
+                    </div>
+                    <div class="trace-controls">
+                        <label>Target Asset:</label>
+                        <select id="trace-target-select" onchange="runTrace()">
+                            <option value="inference:I-883">Inference I-883 (Compromised Output)</option>
+                            <option value="model:M-04">Model M-04 (Apex Subcontractor)</option>
+                            <option value="dataset:D-14">Dataset D-14 (Batch B-221)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Interactive Visual Canvas -->
+                <div class="trace-canvas-container">
+                    <div class="trace-canvas-header">
+                        <div class="epistemic-legend">
+                            <span class="legend-item"><span class="legend-box observed"></span> OBSERVED</span>
+                            <span class="legend-item"><span class="legend-box derived"></span> DERIVED</span>
+                            <span class="legend-item"><span class="legend-box supports"></span> SUPPORTS</span>
+                            <span class="legend-item"><span class="legend-box correlates"></span> CORRELATES</span>
+                        </div>
+                        <div class="trace-summary-badge" id="trace-summary-text">7 nodes correlated</div>
+                    </div>
+
+                    <div class="interactive-lineage-flow" id="lineage-flow-display">
+                        <!-- Reconstructed Flow Diagram Rendered Here -->
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: ASSURANCE PASSPORT -->
+            <section id="tab-passport" class="tab-pane">
+                <div class="pane-header">
+                    <h2>Asset Assurance Passports // Sovereign Identity Profiles</h2>
+                    <div class="passport-tabs">
+                        <button class="filter-btn active" onclick="loadPassport('model', 'M-04')">Model M-04</button>
+                        <button class="filter-btn" onclick="loadPassport('model', 'M-BASE')">Model M-BASE (Ref)</button>
+                        <button class="filter-btn" onclick="loadPassport('dataset', 'D-14')">Dataset D-14</button>
+                        <button class="filter-btn" onclick="loadPassport('dataset', 'D-01')">Dataset D-01 (Clean)</button>
+                    </div>
+                </div>
+
+                <div class="passport-card" id="passport-container">
+                    <!-- Populated dynamically -->
+                </div>
+            </section>
+
+            <!-- TAB 4: ASSURANCE CASE -->
+            <section id="tab-assurance" class="tab-pane">
+                <div class="pane-header">
+                    <h2>Machine-Readable Assurance Case (AC-2026-0041)</h2>
+                    <button class="btn btn-outline" onclick="exportReport()">📥 Export JSON Report</button>
+                </div>
+
+                <div class="assurance-case-view" id="assurance-case-container">
+                    <!-- Populated dynamically -->
+                </div>
+            </section>
+
+            <!-- TAB: DEMO ATTACK LAB (TP/FP BENCHMARK) -->
+            <section id="tab-lab" class="tab-pane">
+                <div class="pane-header">
+                    <div>
+                        <h2>Demo Attack Lab // Empirical Ground Truth vs Observation Matrix</h2>
+                        <p class="pane-sub">Rigorous empirical validation: Injected synthetic ground truth evaluated against DRISHTRA detectors (TP / FP / FN / TN).</p>
+                    </div>
+                    <button class="btn btn-emerald" onclick="runAttackLabBenchmark()">⚡ Run Empirical Benchmark</button>
+                </div>
+
+                <!-- Confusion Matrix Stat Tiles -->
+                <div class="metrics-grid" style="margin-bottom: 1.5rem;">
+                    <div class="metric-card">
+                        <div class="metric-title">TRUE POSITIVES (TP)</div>
+                        <div class="metric-value text-emerald" id="lab-stat-tp">--</div>
+                        <div class="metric-desc">Attacks injected & accurately intercepted</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">FALSE POSITIVES (FP)</div>
+                        <div class="metric-value text-amber" id="lab-stat-fp">--</div>
+                        <div class="metric-desc">Clean assets mistakenly flagged</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">FALSE NEGATIVES (FN)</div>
+                        <div class="metric-value text-crimson" id="lab-stat-fn">--</div>
+                        <div class="metric-desc">Attacks injected but missed by detector</div>
+                    </div>
+                    <div class="metric-card">
+                        <div class="metric-title">TRUE NEGATIVES (TN)</div>
+                        <div class="metric-value text-sky" id="lab-stat-tn">--</div>
+                        <div class="metric-desc">Clean assets correctly cleared</div>
+                    </div>
+                </div>
+
+                <!-- Metrics Summary Strip -->
+                <div class="card" style="margin-bottom: 1.5rem; padding: 1rem;">
+                    <div class="spec-row" style="display: flex; justify-content: space-around; font-family: var(--font-mono); font-size: 0.95rem;">
+                        <div>PRECISION: <strong class="text-emerald" id="lab-metric-prec">--</strong></div>
+                        <div>RECALL: <strong class="text-emerald" id="lab-metric-rec">--</strong></div>
+                        <div>F1-SCORE: <strong class="text-emerald" id="lab-metric-f1">--</strong></div>
+                        <div>ACCURACY: <strong class="text-emerald" id="lab-metric-acc">--</strong></div>
+                    </div>
+                </div>
+
+                <!-- Ground Truth vs DRISHTRA Observation Table -->
+                <div class="card">
+                    <div class="card-header">
+                        <h3>Detailed Test Battery: Injected Ground Truth vs DRISHTRA Observations</h3>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="tactical-table">
+                            <thead>
+                                <tr>
+                                    <th>Test ID</th>
+                                    <th>Pipeline Stage</th>
+                                    <th>Asset ID</th>
+                                    <th>Injected Ground Truth</th>
+                                    <th>DRISHTRA Observation</th>
+                                    <th>Result Matrix</th>
+                                </tr>
+                            </thead>
+                            <tbody id="lab-results-body">
+                                <tr><td colspan="6" class="text-muted" style="text-align: center; padding: 2rem;">Click 'Run Empirical Benchmark' to execute the attack matrix.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB: STAGE ARTIFACTS (9 VERIFIABLE JSONs) -->
+            <section id="tab-artifacts" class="tab-pane">
+                <div class="pane-header">
+                    <div>
+                        <h2>Pipeline Stage Verifiable Artifacts (9 Canonical JSONs)</h2>
+                        <p class="pane-sub">"Every stage produces evidence that the next stage can independently verify."</p>
+                    </div>
+                    <button class="btn btn-outline" onclick="loadStageArtifacts()">🔄 Export / Refresh Artifacts</button>
+                </div>
+
+                <div class="artifacts-layout" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3>Canonical Stage Artifact Manifest</h3>
+                        </div>
+                        <div class="artifacts-list" id="artifacts-manifest-list">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 id="artifact-viewer-title">Artifact JSON Inspector</h3>
+                        </div>
+                        <pre id="artifact-json-viewer" class="json-code" style="max-height: 480px; overflow-y: auto; font-size: 0.8rem; background: #0b0f19; padding: 1rem; border-radius: 6px;">Select an artifact on the left to inspect its cryptographic payload.</pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 5: AUDIT LEDGER -->
+            <section id="tab-audit" class="tab-pane">
+                <div class="pane-header">
+                    <h2>Tamper-Evident Forensic Audit Ledger (Sequential Hash Chain)</h2>
+                    <button class="btn btn-emerald" onclick="verifyAuditLedger()">✓ Verify Chain Integrity</button>
+                </div>
+
+                <div class="chain-status-banner" id="audit-status-banner">
+                    Audit Ledger Status: <strong id="audit-status-text">VALID</strong> (0 Broken Links Detected)
+                </div>
+
+                <div class="audit-timeline" id="audit-timeline-container">
+                    <!-- Populated dynamically -->
+                </div>
+            </section>
+
+            <!-- TAB 6: ATTACK LABORATORY -->
+            <section id="tab-factory" class="tab-pane">
+                <div class="pane-header">
+                    <h2>Attack Scenario Laboratory // Scientific Benchmarking</h2>
+                    <p class="pane-sub">Controlled mutation generation against public datasets (UVH-26, DATS_2022, COCO, TrojAI) with explicit ground truth.</p>
+                </div>
+
+                <div class="factory-grid">
+                    <div class="attack-card">
+                        <div class="attack-badge">DATASET ATTACK</div>
+                        <h3>Near-Duplicate Flooding</h3>
+                        <p>Injects perceptual dHash collisions into tactical reconnaissance sets to artificially bias feature distributions.</p>
+                        <div class="ground-truth-tag">GROUND TRUTH: KNOWN POISONED</div>
+                        <button class="btn btn-outline btn-sm" onclick="runAttackDemo('near_dup')">Test Detector</button>
+                    </div>
+                    <div class="attack-card">
+                        <div class="attack-badge">LABEL ATTACK</div>
+                        <h3>Contradictory Label Inversion</h3>
+                        <p>Assigns conflicting class annotations ('Civilian_Vehicle' on 'Armoured_Vehicle') across identical hashes.</p>
+                        <div class="ground-truth-tag">GROUND TRUTH: KNOWN POISONED</div>
+                        <button class="btn btn-outline btn-sm" onclick="runAttackDemo('label_flip')">Test Detector</button>
+                    </div>
+                    <div class="attack-card">
+                        <div class="attack-badge">MODEL ATTACK</div>
+                        <h3>Trojan Trigger Susceptibility</h3>
+                        <p>Probes model with 10-perturbation battery. Detects immediate class flip under localized corner trigger patch.</p>
+                        <div class="ground-truth-tag">GROUND TRUTH: TROJANED</div>
+                        <button class="btn btn-outline btn-sm" onclick="runAttackDemo('trojan')">Test Detector</button>
+                    </div>
+                    <div class="attack-card">
+                        <div class="attack-badge">INFERENCE ATTACK</div>
+                        <h3>Post-Hoc Output Tampering</h3>
+                        <p>Alters detected bounding boxes or classifications post-inference; caught via canonical Ed25519 signature mismatch.</p>
+                        <div class="ground-truth-tag">GROUND TRUTH: TAMPERED</div>
+                        <button class="btn btn-outline btn-sm" onclick="runAttackDemo('sig_tamper')">Test Detector</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

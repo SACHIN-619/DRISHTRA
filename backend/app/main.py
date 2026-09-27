@@ -70,9 +70,16 @@ from app.db.database import SessionLocal
 from app.services.demo_service import DemoService
 
 # Mount static frontend directory at root after all API routes
-frontend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend"))
-if os.path.exists(frontend_dir):
-    app.mount("/", StaticFiles(directory=frontend_dir, html=True), name="frontend")
+candidate_frontend_dirs = [
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "frontend")),
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "frontend")),
+    os.path.abspath(os.path.join(os.getcwd(), "frontend")),
+    "/app/frontend"
+]
+for candidate in candidate_frontend_dirs:
+    if os.path.exists(candidate) and os.path.isdir(candidate):
+        app.mount("/", StaticFiles(directory=candidate, html=True), name="frontend")
+        break
 
 @app.on_event("startup")
 def startup_event():

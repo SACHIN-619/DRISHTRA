@@ -1,16 +1,26 @@
 """
-DRISHTRA Role-Based Access Control (RBAC) Engine
-Defines five military AI governance roles and strict permission boundaries:
-1. ML_ANALYST: Ingest datasets, register models, run scans, inspect detector findings, run attack simulations.
-   CANNOT: Approve final disposition, modify audit history.
-2. SECURITY_ANALYST: Inspect cryptographic verification, investigate provenance, replay/tampering, contributor risk, examine evidence graph.
-3. REVIEWER_SUPERVISOR: Review assurance cases, inspect evidence, accept/reject findings, approve ACCEPT/REVIEW/QUARANTINE, sign disposition.
-4. AUDITOR: Read-only access to audit chain, historical events, assurance reports, coverage statements, verification records.
-5. ADMINISTRATOR: Manage users, keys, policies, system configuration.
-   CANNOT: Silently rewrite historical evidence, delete or modify tamper-evident audit logs.
+DRISHTRA Role-Based Access Control
+
+Five roles, each with one mission. Authority is split on purpose:
+
+  ML_ANALYST           Prepare and assess AI assets (datasets, models, inference, runs).
+  SECURITY_ANALYST     Investigate integrity threats, correlate evidence, build assurance
+                       cases and RECOMMEND a disposition.
+  REVIEWER_SUPERVISOR  Make the binding, signed disposition (ACCEPT / REVIEW / QUARANTINE).
+  AUDITOR              Independently verify history. Read-only everywhere.
+  ADMINISTRATOR        Operate and govern the platform (users, roles, policy, health).
+                       Holds NO assurance authority and cannot operate on AI assets.
+
+Things no role can do (there is no endpoint for them at all):
+  - delete or edit audit / platform events
+  - edit or delete a recorded decision (decisions are append-only)
+  - alter detector findings
+
+There is no superuser bypass anywhere in the authorization layer.
 """
 from enum import Enum
-from typing import Set, Dict, Any, Optional
+from typing import Set, Dict, Any, List
+
 
 class Role(str, Enum):
     ML_ANALYST = "ML_ANALYST"
@@ -19,97 +29,159 @@ class Role(str, Enum):
     AUDITOR = "AUDITOR"
     ADMINISTRATOR = "ADMINISTRATOR"
 
+
 class Permission(str, Enum):
-    # ML Operations
-    DATASET_INGEST = "dataset:ingest"
-    DATASET_SCAN = "dataset:scan"
-    MODEL_REGISTER = "model:register"
-    MODEL_PROBE = "model:probe"
-    ATTACK_SIMULATE = "attack:simulate"
-    
-    # Security Operations
-    CRYPTO_VERIFY = "crypto:verify"
-    PROVENANCE_INSPECT = "provenance:inspect"
-    GRAPH_EXAMINE = "graph:examine"
-    CONTRIBUTOR_INVESTIGATE = "contributor:investigate"
-    
-    # Review & Governance
-    ASSURANCE_REVIEW = "assurance:review"
-    DISPOSITION_APPROVE = "disposition:approve"
-    DISPOSITION_SIGN = "disposition:sign"
-    
-    # Audit & Inspection
-    AUDIT_READ = "audit:read"
+    # Shared read access to the assurance workspace
+    ASSET_READ = "asset:read"                    # cases, contributors, datasets, models, inferences, runs
+    EVIDENCE_READ = "evidence:read"              # findings, evidence, graph, lineage, passports, assurance cases
     REPORT_READ = "report:read"
-    
-    # System Administration
+
+    # Asset operations
+    CASE_CREATE = "case:create"
+    DATASET_INGEST = "dataset:ingest"
+    MODEL_REGISTER = "model:register"
+    INFERENCE_SUBMIT = "inference:submit"
+    PIPELINE_RUN = "pipeline:run"
+    ATTACK_SIMULATE = "attack:simulate"
+
+    # Security operations
+    CRYPTO_VERIFY = "crypto:verify"
+    ASSURANCE_BUILD = "assurance:build"
+    DISPOSITION_RECOMMEND = "disposition:recommend"
+    SECURITY_EVENTS_READ = "security_events:read"
+
+    # Governance
+    DISPOSITION_DECIDE = "disposition:decide"
+
+    # Audit
+    AUDIT_READ = "audit:read"
+    AUDIT_VERIFY = "audit:verify"
+
+    # Administration
     USER_MANAGE = "user:manage"
     POLICY_MANAGE = "policy:manage"
-    CONFIG_MANAGE = "config:manage"
+    SYSTEM_DIAGNOSTICS = "system:diagnostics"
 
-# Explicit Permission Matrix
+    # Backward-compatible alias used by older tests and docs
+    DISPOSITION_APPROVE = "disposition:decide"
+
+
+_READ = {Permission.ASSET_READ, Permission.EVIDENCE_READ, Permission.REPORT_READ}
+
 ROLE_PERMISSIONS: Dict[Role, Set[Permission]] = {
-    Role.ML_ANALYST: {
+    Role.ML_ANALYST: _READ | {
+        Permission.CASE_CREATE,
         Permission.DATASET_INGEST,
-        Permission.DATASET_SCAN,
         Permission.MODEL_REGISTER,
-        Permission.MODEL_PROBE,
+        Permission.INFERENCE_SUBMIT,
+        Permission.PIPELINE_RUN,
         Permission.ATTACK_SIMULATE,
-        Permission.REPORT_READ
     },
-    Role.SECURITY_ANALYST: {
+    Role.SECURITY_ANALYST: _READ | {
+        Permission.CASE_CREATE,
+        Permission.DATASET_INGEST,
+        Permission.MODEL_REGISTER,
+        Permission.INFERENCE_SUBMIT,
+        Permission.PIPELINE_RUN,
+        Permission.ATTACK_SIMULATE,
         Permission.CRYPTO_VERIFY,
-        Permission.PROVENANCE_INSPECT,
-        Permission.GRAPH_EXAMINE,
-        Permission.CONTRIBUTOR_INVESTIGATE,
-        Permission.REPORT_READ,
-        Permission.AUDIT_READ
-    },
-    Role.REVIEWER_SUPERVISOR: {
-        Permission.ASSURANCE_REVIEW,
-        Permission.DISPOSITION_APPROVE,
-        Permission.DISPOSITION_SIGN,
-        Permission.PROVENANCE_INSPECT,
-        Permission.GRAPH_EXAMINE,
-        Permission.REPORT_READ,
-        Permission.AUDIT_READ
-    },
-    Role.AUDITOR: {
+        Permission.ASSURANCE_BUILD,
+        Permission.DISPOSITION_RECOMMEND,
+        Permission.SECURITY_EVENTS_READ,
         Permission.AUDIT_READ,
-        Permission.REPORT_READ,
-        Permission.PROVENANCE_INSPECT
+    },
+    Role.REVIEWER_SUPERVISOR: _READ | {
+        Permission.CRYPTO_VERIFY,
+        Permission.DISPOSITION_DECIDE,
+        Permission.AUDIT_READ,
+    },
+    Role.AUDITOR: _READ | {
+        Permission.CRYPTO_VERIFY,
+        Permission.AUDIT_READ,
+        Permission.AUDIT_VERIFY,
     },
     Role.ADMINISTRATOR: {
+        Permission.ASSET_READ,
+        Permission.REPORT_READ,
         Permission.USER_MANAGE,
         Permission.POLICY_MANAGE,
-        Permission.CONFIG_MANAGE,
-        Permission.REPORT_READ,
-        Permission.AUDIT_READ
-        # CRITICAL SECURITY DESIGN: ADMINISTRATOR DOES NOT HAVE PERMISSION TO DELETE OR REWRITE AUDIT/EVIDENCE
-    }
+        Permission.SYSTEM_DIAGNOSTICS,
+        Permission.SECURITY_EVENTS_READ,
+        Permission.AUDIT_READ,
+        Permission.AUDIT_VERIFY,
+    },
 }
+
+ROLE_MISSIONS: Dict[Role, Dict[str, Any]] = {
+    Role.ML_ANALYST: {
+        "title": "ML Operations",
+        "mission": "Prepare and assess AI assets.",
+        "question": "What assets need my attention?",
+        "forbidden": [
+            "Finalize or recommend a disposition",
+            "Manage users or policy",
+            "Read platform security events",
+        ],
+    },
+    Role.SECURITY_ANALYST: {
+        "title": "Security Operations",
+        "mission": "Investigate integrity threats and correlate evidence.",
+        "question": "Where is the threat and how is it connected?",
+        "forbidden": [
+            "Finalize a disposition (can only recommend)",
+            "Manage users or policy",
+        ],
+    },
+    Role.REVIEWER_SUPERVISOR: {
+        "title": "Assurance Review Center",
+        "mission": "Make defensible assurance decisions.",
+        "question": "Which decisions need my authorization?",
+        "forbidden": [
+            "Run detectors or ingest assets",
+            "Decide a case whose evaluation they initiated",
+            "Edit an earlier decision",
+        ],
+    },
+    Role.AUDITOR: {
+        "title": "Audit Assurance Center",
+        "mission": "Verify that the system's history is trustworthy.",
+        "question": "Can I prove the history is intact?",
+        "forbidden": [
+            "Modify findings, cases or users",
+            "Run detectors",
+            "Make or recommend decisions",
+        ],
+    },
+    Role.ADMINISTRATOR: {
+        "title": "System Administration",
+        "mission": "Operate and govern the platform.",
+        "question": "Is the platform securely governed?",
+        "forbidden": [
+            "Make, recommend or edit assurance decisions",
+            "Run detectors or alter findings",
+            "Delete or edit audit history",
+        ],
+    },
+}
+
 
 class RBACService:
     @staticmethod
     def has_permission(role: Role, permission: Permission) -> bool:
-        """Evaluates whether a role is authorized for a specific action."""
-        perms = ROLE_PERMISSIONS.get(role, set())
-        return permission in perms
+        return permission in ROLE_PERMISSIONS.get(role, set())
+
+    @staticmethod
+    def permissions_for(role: Role) -> List[str]:
+        return sorted({p.value for p in ROLE_PERMISSIONS.get(role, set())})
 
     @staticmethod
     def get_role_capabilities(role: Role) -> Dict[str, Any]:
-        """Returns human-readable permitted and forbidden operations for a role."""
-        perms = [p.value for p in ROLE_PERMISSIONS.get(role, set())]
-        forbidden = []
-        if role == Role.ML_ANALYST:
-            forbidden = ["Approve final disposition (ACCEPT/QUARANTINE)", "Modify audit history"]
-        elif role == Role.AUDITOR:
-            forbidden = ["Mutate cases", "Register models/datasets", "Execute probes"]
-        elif role == Role.ADMINISTRATOR:
-            forbidden = ["Silently rewrite historical evidence", "Delete or tamper with audit ledger"]
-
+        mission = ROLE_MISSIONS.get(role, {})
         return {
             "role": role.value,
-            "permissions": perms,
-            "explicitly_forbidden": forbidden
+            "title": mission.get("title"),
+            "mission": mission.get("mission"),
+            "question": mission.get("question"),
+            "permissions": RBACService.permissions_for(role),
+            "explicitly_forbidden": mission.get("forbidden", []),
         }

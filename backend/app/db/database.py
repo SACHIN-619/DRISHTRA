@@ -79,8 +79,17 @@ else:
             pool_recycle=300
         )
     except Exception as e:
-        logger.warning(f"[!] Failed to initialize Postgres engine ({e}), falling back to SQLite vault.")
-        engine = _build_sqlite_engine()
+        # Never fall back silently: an operator who configured PostgreSQL must not end up
+        # writing assurance evidence to a different (local) database without knowing it.
+        if os.getenv("DRISHTRA_ALLOW_SQLITE_FALLBACK", "false").lower() in ("1", "true", "yes"):
+            logger.error(f"[!] PostgreSQL engine failed ({e}); DRISHTRA_ALLOW_SQLITE_FALLBACK=true so using the local SQLite vault.")
+            engine = _build_sqlite_engine()
+        else:
+            raise RuntimeError(
+                "DATABASE_URL points to PostgreSQL but the engine could not be created "
+                f"({e}). Install a driver (pip install psycopg2-binary) or set "
+                "DRISHTRA_ALLOW_SQLITE_FALLBACK=true to use the local vault deliberately."
+            ) from e
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

@@ -11,6 +11,7 @@ from app.db.models import InferenceRecord, Finding, Evidence, EvidenceEdge, utc_
 from app.schemas.all_schemas import InferenceRegister
 from app.detectors.replay_detector import ReplayAndProvenanceDetector
 from app.services.audit_service import AuditService
+from app.services.evidence_writer import record_check
 
 class InferenceService:
     @staticmethod
@@ -77,9 +78,12 @@ class InferenceService:
             raise ValueError(f"Inference record {inference_id} not found")
 
         # Gather previously seen nonces in this case to detect replay
+        # Only records that precede this one can make it a replay
+        # (otherwise the original would be flagged as a replay of its copy).
         all_nonces = db.query(InferenceRecord.nonce).filter(
             InferenceRecord.case_id == record.case_id,
-            InferenceRecord.inference_id != inference_id
+            InferenceRecord.inference_id != inference_id,
+            InferenceRecord.sequence < record.sequence,
         ).all()
         seen_nonces = {n[0] for n in all_nonces}
 
@@ -97,62 +101,47 @@ class InferenceService:
             "signature": record.signature
         }
 
-        detector = ReplayAndProvenanceDetector()
-        res = detector.run(
+        res = ReplayAndProvenanceDetector().run(
             record=payload,
             public_key_hex=public_key_hex,
             seen_nonces=seen_nonces,
             expected_sequence=record.sequence
         )
-
+        # Cross-lifecycle binding: the model digest the inference claims must be
+        # the digest registered for that model (catches model substitution at runtime).
+        if record.model_id and str(getattr(res.status, "value", res.status)) in ("PASS", "FINDING"):
+            from app.db.models import ModelAsset
+            from app.detectors.base import DetectorFinding, DetectorStatus
+            m = db.query(ModelAsset).filter(ModelAsset.model_id == record.model_id).first()
+            if m and m.weight_sha256 and record.model_sha256 != m.weight_sha256:
+                res.findings.append(DetectorFinding(
+                    detector_id=res.detector_id, finding_type="INFERENCE_MODEL_BINDING_MISMATCH",
+                    severity="HIGH", evidence_type="CRYPTOGRAPHIC", deterministic=True,
+                    explanation=(f"Inference claims model digest {record.model_sha256[:12]}… but model {m.model_id} "
+                                 f"is registered with {m.weight_sha256[:12]}…. The output was not produced by the registered model."),
+                    observation="model_sha256 in attestation != registered weight_sha256",
+                    measurement={"claimed": record.model_sha256, "registered": m.weight_sha256, "model_id": m.model_id},
+                ))
+                res.status = DetectorStatus.FINDING
+        replay_types = {"INFERENCE_REPLAY_ATTACK", "INFERENCE_SEQUENCE_ANOMALY"}
         created_findings = []
-        if res.findings:
-            # Mark record status
-            if any(f.finding_type == "INFERENCE_REPLAY_ATTACK" for f in res.findings):
-                record.verification_status = "REPLAY_DETECTED"
-            elif any(f.finding_type == "CRYPTOGRAPHIC_SIGNATURE_INVALID" for f in res.findings):
-                record.verification_status = "INVALID_SIGNATURE"
-            else:
-                record.verification_status = "TAMPERED"
+        # One detector run feeds two coverage dimensions.
+        created_findings += record_check(db, record.case_id, "INFERENCE", inference_id, "D9A_SIGNATURE_BINDING",
+                                         res, actor=actor, exclude_finding_types=replay_types)
+        created_findings += record_check(db, record.case_id, "INFERENCE", inference_id, "D9B_REPLAY_SEQUENCE",
+                                         res, actor=actor, only_finding_types=replay_types)
 
-            for df in res.findings:
-                f_id = f"FND-{uuid.uuid4().hex[:8].upper()}"
-                finding = Finding(
-                    finding_id=f_id,
-                    case_id=record.case_id,
-                    asset_id=inference_id,
-                    asset_type="INFERENCE",
-                    detector_id=detector.detector_id,
-                    detector_version=detector.detector_version,
-                    finding_type=df.finding_type,
-                    severity=df.severity,
-                    confidence=df.confidence,
-                    status="FINDING",
-                    explanation=df.explanation,
-                    limitations=res.limitations,
-                    created_at=utc_now_iso()
-                )
-                db.add(finding)
-                
-                ev_id = f"EVD-{uuid.uuid4().hex[:8].upper()}"
-                ev = Evidence(
-                    evidence_id=ev_id,
-                    case_id=record.case_id,
-                    finding_id=f_id,
-                    evidence_type="CRYPTOGRAPHIC",
-                    source_asset=inference_id,
-                    detector=detector.detector_id,
-                    observation=df.observation,
-                    measurement_json=json.dumps(df.measurement),
-                    confidence=df.confidence,
-                    timestamp=utc_now_iso(),
-                    sha256=hashlib.sha256(json.dumps(df.measurement).encode('utf-8')).hexdigest()
-                )
-                db.add(ev)
-                created_findings.append(finding)
-        else:
+        types = {f.finding_type for f in res.findings}
+        if "INFERENCE_REPLAY_ATTACK" in types:
+            record.verification_status = "REPLAY_DETECTED"
+        elif "CRYPTOGRAPHIC_SIGNATURE_INVALID" in types:
+            record.verification_status = "INVALID_SIGNATURE"
+        elif types:
+            record.verification_status = "TAMPERED"
+        elif str(getattr(res.status, "value", res.status)) == "PASS":
             record.verification_status = "VERIFIED"
-
+        else:
+            record.verification_status = "UNVERIFIED"
         db.commit()
 
         AuditService.record_event(

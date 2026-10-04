@@ -32,7 +32,7 @@ class TacticalIncidentExplainer:
         status = assurance_case.get("status", "REVIEW_REQUIRED")
 
         # Check if Grok API is enabled and available
-        if settings.GROK_API_KEY and not settings.IS_AIR_GAPPED:
+        if settings.GROK_API_KEY and settings.ALLOW_EXTERNAL_EXPLAINER and not settings.IS_AIR_GAPPED:
             try:
                 system_prompt = (
                     "You are the Sovereign Military AI Integrity Officer for the Indian Army (DGIS). "

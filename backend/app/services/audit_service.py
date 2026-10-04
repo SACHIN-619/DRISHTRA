@@ -1,7 +1,7 @@
 """
 DRISHTRA Forensic Audit Service
-Sequential, Cryptographically Chained Audit Ledger with Ed25519 Signing
-Guarantees Non-Repudiation and Tamper-Evidence for Sovereign Defence Systems.
+Sequential, Cryptographically Chained Audit Ledger with SHA-256 / Ed25519 Signing.
+Guarantees Non-Repudiation, Sequence Monotonicity, and Tamper-Evidence for Sovereign Defence Systems.
 """
 import uuid
 from typing import Dict, Any, List, Optional
@@ -21,9 +21,10 @@ class AuditService:
         reason: Optional[str] = None
     ) -> AuditEvent:
         """Appends a new cryptographically chained audit event to the ledger."""
-        # Find latest event in this case
-        last_event = db.query(AuditEvent).filter(AuditEvent.case_id == case_id).order_by(AuditEvent.timestamp.desc()).first()
+        # Find latest event in this case by sequence
+        last_event = db.query(AuditEvent).filter(AuditEvent.case_id == case_id).order_by(AuditEvent.sequence.desc()).first()
         prev_hash = last_event.event_hash if last_event else GENESIS_HASH
+        next_seq = (last_event.sequence + 1) if last_event else 1
 
         event_id = f"EVT-{uuid.uuid4().hex[:12].upper()}"
         ts = utc_now_iso()
@@ -31,6 +32,7 @@ class AuditService:
         payload = {
             "event_id": event_id,
             "case_id": case_id,
+            "sequence": next_seq,
             "actor": actor,
             "action": action,
             "asset_id": asset_id,
@@ -46,6 +48,7 @@ class AuditService:
         event = AuditEvent(
             event_id=event_id,
             case_id=case_id,
+            sequence=next_seq,
             actor=actor,
             action=action,
             asset_id=asset_id,
@@ -54,7 +57,7 @@ class AuditService:
             timestamp=ts,
             previous_event_hash=prev_hash,
             event_hash=curr_hash,
-            signature=None # Can be signed with sovereign Ed25519 node key
+            signature=None
         )
         db.add(event)
         db.commit()
@@ -63,7 +66,7 @@ class AuditService:
 
     @staticmethod
     def get_events(db: Session, case_id: str) -> List[AuditEvent]:
-        return db.query(AuditEvent).filter(AuditEvent.case_id == case_id).order_by(AuditEvent.timestamp.asc()).all()
+        return db.query(AuditEvent).filter(AuditEvent.case_id == case_id).order_by(AuditEvent.sequence.asc()).all()
 
     @staticmethod
     def verify_case_audit(db: Session, case_id: str) -> Dict[str, Any]:
@@ -76,6 +79,7 @@ class AuditService:
             {
                 "event_id": e.event_id,
                 "case_id": e.case_id,
+                "sequence": e.sequence,
                 "actor": e.actor,
                 "action": e.action,
                 "asset_id": e.asset_id,

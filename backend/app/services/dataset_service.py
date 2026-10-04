@@ -12,7 +12,12 @@ from app.schemas.all_schemas import DatasetRegister
 from app.crypto.hashing import sha256_canonical_dict
 from app.detectors.duplicate_detector import ExactDuplicateDetector, NearDuplicateDetector
 from app.detectors.label_anomaly_detector import LabelAnomalyDetector
+from app.detectors.class_imbalance_detector import ClassImbalanceDetector
+from app.detectors.malformed_annotation_detector import MalformedAnnotationDetector
+from app.detectors.distribution_shift_detector import DistributionShiftDetector
+from app.detectors.ood_detector import OutOfDistributionDetector
 from app.services.audit_service import AuditService
+from app.services.evidence_writer import record_check
 
 class DatasetService:
     @staticmethod
@@ -88,132 +93,61 @@ class DatasetService:
         return dataset
 
     @staticmethod
-    def scan_dataset(db: Session, dataset_id: str, samples: List[Dict[str, Any]], actor: str = "analyst") -> List[Finding]:
+    def scan_dataset(
+        db: Session,
+        dataset_id: str,
+        samples: List[Dict[str, Any]],
+        actor: str = "analyst",
+        embeddings: Optional[List[List[float]]] = None,
+        reference_profile: Optional[Dict[str, Any]] = None,
+        operational_metrics: Optional[Dict[str, float]] = None,
+        operational_metadata: Optional[Dict[str, Any]] = None,
+    ) -> List[Finding]:
+        """
+        Runs the full dataset battery (D1-D7) against canonical sample records.
+        Each detector produces a CheckExecution; checks whose inputs are missing
+        are recorded as NOT_TESTED rather than silently skipped.
+        """
         dataset = db.query(Dataset).filter(Dataset.dataset_id == dataset_id).first()
         if not dataset:
             raise ValueError(f"Dataset {dataset_id} not found")
 
-        created_findings = []
+        input_digest = sha256_canonical_dict({"samples": [
+            {k: v for k, v in s.items() if k not in ("ground_truth",)} for s in samples
+        ]})
+        # Ground-truth isolation: detectors never see injected labels of the attack lab.
+        detector_view = [{k: v for k, v in s.items() if k not in ("ground_truth", "mutation_type")} for s in samples]
 
-        # 1. Run Exact Duplicate Detector
-        exact_det = ExactDuplicateDetector()
-        res_exact = exact_det.run(samples=samples)
-        for df in res_exact.findings:
-            f_id = f"FND-{uuid.uuid4().hex[:8].upper()}"
-            finding = Finding(
-                finding_id=f_id,
-                case_id=dataset.case_id,
-                asset_id=dataset_id,
-                asset_type="DATASET",
-                detector_id=exact_det.detector_id,
-                detector_version=exact_det.detector_version,
-                finding_type=df.finding_type,
-                severity=df.severity,
-                confidence=df.confidence,
-                status="FINDING",
-                explanation=df.explanation,
-                limitations=exact_det.supported_inputs[0],
-                created_at=utc_now_iso()
-            )
-            db.add(finding)
-            
-            # Evidence
-            ev_id = f"EVD-{uuid.uuid4().hex[:8].upper()}"
-            ev = Evidence(
-                evidence_id=ev_id,
-                case_id=dataset.case_id,
-                finding_id=f_id,
-                evidence_type="CRYPTOGRAPHIC",
-                source_asset=dataset_id,
-                detector=exact_det.detector_id,
-                observation=df.observation,
-                measurement_json=json.dumps(df.measurement),
-                confidence=df.confidence,
-                timestamp=utc_now_iso(),
-                sha256=hashlib.sha256(json.dumps(df.measurement).encode('utf-8')).hexdigest()
-            )
-            db.add(ev)
-            created_findings.append(finding)
+        ref = reference_profile or {}
+        battery = [
+            ("D1_EXACT_DUPLICATE", lambda: ExactDuplicateDetector().run(samples=detector_view)),
+            ("D2_NEAR_DUPLICATE", lambda: NearDuplicateDetector().run(samples=detector_view)),
+            ("D3_LABEL_CONSISTENCY", lambda: LabelAnomalyDetector().run(samples=detector_view)),
+            ("D4_CLASS_BALANCE", lambda: ClassImbalanceDetector().run(samples=detector_view)),
+            ("D6_ANNOTATION_VALIDITY", lambda: MalformedAnnotationDetector().run(samples=detector_view)),
+            ("D5_DISTRIBUTION_SHIFT", lambda: DistributionShiftDetector().run(
+                current_metrics=operational_metrics or {}, reference_profile=ref.get("metrics"),
+                metadata=operational_metadata)),
+            ("D7_OUT_OF_DISTRIBUTION", lambda: OutOfDistributionDetector().run(
+                embeddings=embeddings, reference_mean=ref.get("embedding_mean"), reference_std=ref.get("embedding_std"))),
+        ]
 
-        # 2. Run Near-Duplicate Detector
-        near_det = NearDuplicateDetector()
-        res_near = near_det.run(samples=samples)
-        for df in res_near.findings:
-            f_id = f"FND-{uuid.uuid4().hex[:8].upper()}"
-            finding = Finding(
-                finding_id=f_id,
-                case_id=dataset.case_id,
-                asset_id=dataset_id,
-                asset_type="DATASET",
-                detector_id=near_det.detector_id,
-                detector_version=near_det.detector_version,
-                finding_type=df.finding_type,
-                severity=df.severity,
-                confidence=df.confidence,
-                status="FINDING",
-                explanation=df.explanation,
-                limitations=res_near.limitations,
-                created_at=utc_now_iso()
+        created: List[Finding] = []
+        outcomes = {}
+        for check_id, run in battery:
+            try:
+                result = run()
+            except Exception as exc:  # a broken detector must not look like a pass
+                from app.detectors.base import DetectorResult, DetectorStatus
+                result = DetectorResult(
+                    detector_id=check_id.lower(), detector_version="1.0.0",
+                    status=DetectorStatus.ERROR, limitations=[f"Detector error: {exc}"],
+                )
+            created += record_check(
+                db, dataset.case_id, "DATASET", dataset_id, check_id, result,
+                actor=actor, input_digest=input_digest,
             )
-            db.add(finding)
-            
-            ev_id = f"EVD-{uuid.uuid4().hex[:8].upper()}"
-            ev = Evidence(
-                evidence_id=ev_id,
-                case_id=dataset.case_id,
-                finding_id=f_id,
-                evidence_type="STATISTICAL",
-                source_asset=dataset_id,
-                detector=near_det.detector_id,
-                observation=df.observation,
-                measurement_json=json.dumps(df.measurement),
-                confidence=df.confidence,
-                timestamp=utc_now_iso(),
-                sha256=hashlib.sha256(json.dumps(df.measurement).encode('utf-8')).hexdigest()
-            )
-            db.add(ev)
-            created_findings.append(finding)
-
-        # 3. Run Label Anomaly Detector
-        label_det = LabelAnomalyDetector()
-        res_label = label_det.run(samples=samples)
-        for df in res_label.findings:
-            f_id = f"FND-{uuid.uuid4().hex[:8].upper()}"
-            finding = Finding(
-                finding_id=f_id,
-                case_id=dataset.case_id,
-                asset_id=dataset_id,
-                asset_type="DATASET",
-                detector_id=label_det.detector_id,
-                detector_version=label_det.detector_version,
-                finding_type=df.finding_type,
-                severity=df.severity,
-                confidence=df.confidence,
-                status="FINDING",
-                explanation=df.explanation,
-                limitations=res_label.limitations,
-                created_at=utc_now_iso()
-            )
-            db.add(finding)
-            
-            ev_id = f"EVD-{uuid.uuid4().hex[:8].upper()}"
-            ev = Evidence(
-                evidence_id=ev_id,
-                case_id=dataset.case_id,
-                finding_id=f_id,
-                evidence_type="STATISTICAL",
-                source_asset=dataset_id,
-                detector=label_det.detector_id,
-                observation=df.observation,
-                measurement_json=json.dumps(df.measurement),
-                confidence=df.confidence,
-                timestamp=utc_now_iso(),
-                sha256=hashlib.sha256(json.dumps(df.measurement).encode('utf-8')).hexdigest()
-            )
-            db.add(ev)
-            created_findings.append(finding)
-
-        db.commit()
+            outcomes[check_id] = result.status.value if hasattr(result.status, "value") else str(result.status)
 
         AuditService.record_event(
             db=db,
@@ -222,6 +156,8 @@ class DatasetService:
             action="DATASET_SCANNED",
             asset_id=dataset_id,
             result="COMPLETED",
-            reason=f"Executed integrity battery on {len(samples)} samples; produced {len(created_findings)} findings."
+            reason=json.dumps({"samples": len(samples), "input_digest": input_digest,
+                               "findings": len(created), "checks": outcomes}, sort_keys=True),
         )
-        return created_findings
+        return created
+

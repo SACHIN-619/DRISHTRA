@@ -17,7 +17,7 @@ from typing import Dict, Any, List
 from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.db.models import Case, Dataset, ModelAsset, InferenceRecord, Finding, Evidence, AssuranceCase, AuditEvent
-from app.api.routes.evidence import get_case_graph
+from app.correlation.evidence_graph import EvidenceGraphBuilder
 from app.services.report_service import ReportService
 from app.services.audit_service import AuditService
 
@@ -132,8 +132,8 @@ class ArtifactExportService:
         paths["verification_result"] = p5
 
         # 6. evidence_graph.json
-        graph_resp = get_case_graph(case_id, db)
-        graph_data = graph_resp.model_dump()
+        builder = EvidenceGraphBuilder.from_database(case_id, db)
+        graph_data = builder.to_schema().model_dump()
         p6 = os.path.join(out_dir, "evidence_graph.json")
         with open(p6, "w", encoding="utf-8") as f:
             json.dump(graph_data, f, indent=2)
@@ -185,3 +185,49 @@ class ArtifactExportService:
         paths["audit_chain"] = p9
 
         return paths
+
+    @classmethod
+    def export_case_bundle(cls, db: Session, case_id: str, assurance_run_id: str = "AR-2026-000001") -> Dict[str, Any]:
+        """
+        Exports all 9 canonical stage artifacts with standard header metadata and calculates artifact hashes.
+        Returns bundle summary mapping artifact name -> sha256 digest.
+        """
+        import hashlib
+        from datetime import datetime, timezone
+
+        paths = cls.export_all_stage_artifacts(db, case_id)
+        now_iso = datetime.now(timezone.utc).isoformat()
+        artifact_hashes = {}
+
+        for name, file_path in paths.items():
+            if os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content_data = json.load(f)
+
+                # Compute content sha256 before wrapping
+                raw_json_str = json.dumps(content_data, sort_keys=True)
+                content_sha256 = hashlib.sha256(raw_json_str.encode()).hexdigest()
+
+                wrapped = {
+                    "header": {
+                        "schema_version": "1.0.0",
+                        "created_at": now_iso,
+                        "case_id": case_id,
+                        "assurance_run_id": assurance_run_id,
+                        "sha256": content_sha256
+                    },
+                    "data": content_data
+                }
+
+                with open(file_path, "w", encoding="utf-8") as f:
+                    json.dump(wrapped, f, indent=2)
+
+                artifact_hashes[name] = content_sha256
+
+        return {
+            "case_id": case_id,
+            "assurance_run_id": assurance_run_id,
+            "artifact_count": len(paths),
+            "artifact_paths": paths,
+            "artifact_hashes": artifact_hashes
+        }

@@ -12,19 +12,21 @@ from app.schemas.all_schemas import ModelRegister
 from app.detectors.model_integrity_detector import ModelIntegrityDetector
 from app.detectors.behavioral_fingerprint_detector import BehavioralFingerprintDetector
 from app.services.audit_service import AuditService
+from app.services.evidence_writer import record_check, record_not_applicable
 
 class ModelService:
     @staticmethod
     def register_model(db: Session, model_in: ModelRegister, weight_bytes: Optional[bytes] = None, actor: str = "analyst") -> ModelAsset:
         model_id = f"M-{uuid.uuid4().hex[:6].upper()}"
         
-        # Calculate weight SHA-256
+        # The registered digest is what every later delivery is compared against.
+        # It is never invented: it comes from the uploaded bytes or the contributor's declaration.
         if weight_bytes:
             weight_digest = hashlib.sha256(weight_bytes).hexdigest()
+        elif model_in.weight_sha256:
+            weight_digest = model_in.weight_sha256
         else:
-            # Deterministic simulation hash for registration manifest
-            seed = f"{model_id}:{model_in.name}:{model_in.version}:{model_in.architecture}"
-            weight_digest = hashlib.sha256(seed.encode('utf-8')).hexdigest()
+            raise ValueError("A registered weight digest (weight_sha256) or the model file is required.")
 
         model = ModelAsset(
             model_id=model_id,
@@ -75,98 +77,43 @@ class ModelService:
         model_id: str,
         current_weight_sha256: str,
         probe_responses: Optional[Dict[str, Any]] = None,
-        actor: str = "analyst"
+        actor: str = "analyst",
+        run_digest: bool = True,
+        run_behaviour: bool = True,
     ) -> List[Finding]:
+        """
+        D8A weight digest, D8B behavioural probes (when probe responses
+        are supplied), D8C white-box analysis (declared NOT_APPLICABLE for
+        black-box / structural-only access, NOT_TESTED otherwise).
+        """
         model = db.query(ModelAsset).filter(ModelAsset.model_id == model_id).first()
         if not model:
             raise ValueError(f"Model {model_id} not found")
 
-        created_findings = []
-
-        # 1. Model Digest & Weight Integrity Check
-        int_det = ModelIntegrityDetector()
-        res_int = int_det.run(
-            current_weight_sha256=current_weight_sha256,
-            registered_weight_sha256=model.weight_sha256,
-            reference_model_sha256=None
-        )
-        for df in res_int.findings:
-            f_id = f"FND-{uuid.uuid4().hex[:8].upper()}"
-            finding = Finding(
-                finding_id=f_id,
-                case_id=model.case_id,
-                asset_id=model_id,
-                asset_type="MODEL",
-                detector_id=int_det.detector_id,
-                detector_version=int_det.detector_version,
-                finding_type=df.finding_type,
-                severity=df.severity,
-                confidence=df.confidence,
-                status="FINDING",
-                explanation=df.explanation,
-                limitations=res_int.limitations,
-                created_at=utc_now_iso()
+        created: List[Finding] = []
+        if run_digest:
+            res_int = ModelIntegrityDetector().run(
+                current_weight_sha256=current_weight_sha256,
+                registered_weight_sha256=model.weight_sha256,
+                reference_model_sha256=None,
             )
-            db.add(finding)
-            
-            ev_id = f"EVD-{uuid.uuid4().hex[:8].upper()}"
-            ev = Evidence(
-                evidence_id=ev_id,
-                case_id=model.case_id,
-                finding_id=f_id,
-                evidence_type="CRYPTOGRAPHIC",
-                source_asset=model_id,
-                detector=int_det.detector_id,
-                observation=df.observation,
-                measurement_json=json.dumps(df.measurement),
-                confidence=df.confidence,
-                timestamp=utc_now_iso(),
-                sha256=hashlib.sha256(json.dumps(df.measurement).encode('utf-8')).hexdigest()
-            )
-            db.add(ev)
-            created_findings.append(finding)
+            created += record_check(db, model.case_id, "MODEL", model_id, "D8A_WEIGHT_DIGEST", res_int,
+                                    actor=actor, input_digest=current_weight_sha256)
+        if not run_behaviour:
+            db.commit()
+            return created
 
-        # 2. Behavioral Probe Battery Check
-        if probe_responses:
-            beh_det = BehavioralFingerprintDetector()
-            res_beh = beh_det.run(probe_results=probe_responses)
-            for df in res_beh.findings:
-                f_id = f"FND-{uuid.uuid4().hex[:8].upper()}"
-                finding = Finding(
-                    finding_id=f_id,
-                    case_id=model.case_id,
-                    asset_id=model_id,
-                    asset_type="MODEL",
-                    detector_id=beh_det.detector_id,
-                    detector_version=beh_det.detector_version,
-                    finding_type=df.finding_type,
-                    severity=df.severity,
-                    confidence=df.confidence,
-                    status="FINDING",
-                    explanation=df.explanation,
-                    limitations=res_beh.limitations,
-                    created_at=utc_now_iso()
-                )
-                db.add(finding)
-                
-                ev_id = f"EVD-{uuid.uuid4().hex[:8].upper()}"
-                ev = Evidence(
-                    evidence_id=ev_id,
-                    case_id=model.case_id,
-                    finding_id=f_id,
-                    evidence_type="BEHAVIORAL",
-                    source_asset=model_id,
-                    detector=beh_det.detector_id,
-                    observation=df.observation,
-                    measurement_json=json.dumps(df.measurement),
-                    confidence=df.confidence,
-                    timestamp=utc_now_iso(),
-                    sha256=hashlib.sha256(json.dumps(df.measurement).encode('utf-8')).hexdigest()
-                )
-                db.add(ev)
-                created_findings.append(finding)
+        res_beh = BehavioralFingerprintDetector().run(probe_results=probe_responses or None)
+        created += record_check(db, model.case_id, "MODEL", model_id, "D8B_BEHAVIOURAL_PROBE", res_beh, actor=actor)
 
-        db.commit()
+        access = model.access_level or "BLACK_BOX"
+        if access in ("BLACK_BOX", "STRUCTURAL_ONLY", "UNAVAILABLE"):
+            reason = (f"Supplied under {access} access: internal weights/activations unavailable, so white-box "
+                      "trigger reconstruction cannot run. Declared limitation, not a pass.")
+        else:
+            reason = ("White-box weights are available, but white-box trigger reconstruction is not implemented "
+                      "in this prototype. Black-box probes were used instead. Declared limitation, not a pass.")
+        record_not_applicable(db, model.case_id, "MODEL", model_id, "D8C_WHITE_BOX_ANALYSIS", reason, actor=actor)
 
         AuditService.record_event(
             db=db,
@@ -175,6 +122,8 @@ class ModelService:
             action="MODEL_SCANNED",
             asset_id=model_id,
             result="COMPLETED",
-            reason=f"Executed model integrity and behavioral probe battery; produced {len(created_findings)} findings."
+            reason=json.dumps({"findings": len(created), "probes_supplied": bool(probe_responses),
+                               "access_level": model.access_level}, sort_keys=True),
         )
-        return created_findings
+        return created
+

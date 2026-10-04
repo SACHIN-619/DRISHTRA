@@ -1,7 +1,8 @@
 """
-DRISHTRA Evaluation & Attack Lab API Routes
-Exposes empirical benchmarking, ground truth vs observation evaluation,
-confusion matrix (TP/FP/FN/TN), and discrete stage artifact retrieval.
+DRISHTRA Benchmark & Attack Lab API Endpoints
+Provides:
+- Controlled Synthetic Benchmark Execution (TP/FP/FN/TN, Precision, Recall, Specificity, FPR)
+- Stage-by-Stage Machine-Verifiable Artifact Exports
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -12,17 +13,17 @@ from app.services.artifact_export_service import ArtifactExportService
 from app.core.security import require_permission, TokenData
 from app.core.rbac import Permission
 
-router = APIRouter(prefix="/evaluation", tags=["Evaluation & Attack Lab"])
+router = APIRouter(prefix="/api/v1/benchmarks", tags=["Benchmarks & Attack Lab"])
 
 @router.post("/attack-lab/run")
 def run_attack_lab_benchmark(user: TokenData = Depends(require_permission(Permission.ATTACK_SIMULATE))):
     """
     Executes the controlled Demo Attack Lab benchmark.
     Compares injected Ground Truth against DRISHTRA observations
-    and calculates TP / FP / FN / TN, Precision, Recall, and F1-score.
+    and calculates TP, FP, FN, TN, Precision, Recall, F1, Specificity, and FPR.
+    Clearly labeled as a synthetic controlled benchmark.
     """
-    results = DemoAttackLab.run_benchmark()
-    return results
+    return DemoAttackLab.run_benchmark()
 
 @router.get("/artifacts/{case_id}")
 def export_stage_artifacts(case_id: str, db: Session = Depends(get_db), user: TokenData = Depends(require_permission(Permission.EVIDENCE_READ))):

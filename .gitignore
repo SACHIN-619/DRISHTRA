@@ -12,6 +12,8 @@ htmlcov/
 .env
 backend/.env
 *.local.env
+*.key
+*.pem
 
 # Local Databases (Auto-generated on startup)
 *.db
@@ -27,6 +29,10 @@ storage/fixtures/*
 !storage/fixtures/.gitkeep
 storage/manifests/*
 !storage/manifests/.gitkeep
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/tmp/*
+!storage/tmp/.gitkeep
 backend/storage/
 
 # IDE & OS Files
@@ -36,3 +42,33 @@ backend/storage/
 Thumbs.db
 Desktop.ini
 *.log
+
+storage/keys/
+backend/storage/keys/
+storage/assessment_inputs/
+backend/app/storage/
+
+# demo-video recording takes
+demo_take/
+backend/demo_take/
+e2e_shots/
+web/node_modules
+demo_video/
+
+# Node / build caches
+node_modules/
+frontend/.next/
+
+# Local-only material that is not part of the product
+synthetic_datas/
+browser_artifacts/
+temp_chrome_profile/
+temp_fresh_profile_*/
+Drishtra_ai_assurance_platform/
+storage/metrics/
+frontend/
+backend/frontend/
+
+# one-off helper used to publish v2 history
+commit_and_push.ps1
+

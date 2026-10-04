@@ -11,7 +11,10 @@ services:
       - IS_AIR_GAPPED=true
       - PORT=8000
       - DATABASE_URL=sqlite:///./storage/drishtra_vault.db
-      - SECRET_KEY=sovereign-defence-drishtra-2026-key
+      # Leave empty to generate a per-install secret inside the persisted vault (storage/keys)
+      - SECRET_KEY=${SECRET_KEY:-}
+      - DEMO_MODE=${DEMO_MODE:-true}
+      - BASE_STORAGE_DIR=./storage
     ports:
       - "8000:8000"
     volumes:

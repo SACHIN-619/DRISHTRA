@@ -21,12 +21,13 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/ ./backend/
-COPY frontend/ ./frontend/
+# Prebuilt offline console, served by FastAPI from /app/web/dist
+COPY web/dist/ ./web/dist/
 COPY scripts/ ./scripts/
 COPY docs/ ./docs/
 
 # Create persistent storage vault
-RUN mkdir -p /app/storage/artifacts /app/storage/manifests /app/storage/audit /app/storage/fixtures
+RUN mkdir -p /app/storage/artifacts /app/storage/manifests /app/storage/audit /app/storage/fixtures /app/storage/keys
 
 EXPOSE 8000
 

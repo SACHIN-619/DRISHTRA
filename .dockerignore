@@ -17,3 +17,14 @@ storage/audit/*
 !storage/audit/.gitkeep
 storage/manifests/*
 !storage/manifests/.gitkeep
+# never bake secrets, local vaults or dev clutter into an image
+storage/keys
+**/storage/keys
+backend/storage
+node_modules
+**/node_modules
+frontend
+synthetic_datas
+browser_artifacts
+demo_video
+temp_*

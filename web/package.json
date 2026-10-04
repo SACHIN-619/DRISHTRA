@@ -1,0 +1,21 @@
+{
+  "name": "drishtra-console",
+  "version": "2.0.0",
+  "private": true,
+  "description": "DRISHTRA offline assurance console (served by the FastAPI backend from web/dist)",
+  "scripts": {
+    "build": "node build.mjs",
+    "watch": "node build.mjs --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.0"
+  }
+}

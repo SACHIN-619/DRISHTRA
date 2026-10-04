@@ -11,6 +11,7 @@ Evaluates model robustness and trigger susceptibility under a standardized 10-pr
 8. Center Crop (80%)
 9. Trigger Occlusion Patch (Simulated Backdoor Trigger)
 10. JPEG Compression (Quality=40)
+Standardized evidence contract.
 """
 import time
 from typing import List, Dict, Any, Optional
@@ -39,11 +40,10 @@ class BehavioralFingerprintDetector(BaseDetector):
         probes["contrast_minus"] = ImageEnhance.Contrast(img).enhance(0.6)
         # 6. Blur
         probes["gaussian_blur"] = img.filter(ImageFilter.GaussianBlur(radius=1.5))
-        # 7. Occlusion / Trigger Patch (Simulating classic BadNets/TrojAI checkerboard in bottom right)
+        # 7. Trigger Occlusion Patch
         occl = img.copy()
         w, h = occl.size
         patch_size = max(8, int(min(w, h) * 0.1))
-        # Draw high-contrast trigger patch in corner
         import PIL.ImageDraw as ImageDraw
         draw = ImageDraw.Draw(occl)
         draw.rectangle([w - patch_size - 4, h - patch_size - 4, w - 4, h - 4], fill=(255, 255, 0), outline=(0, 0, 0))
@@ -57,6 +57,7 @@ class BehavioralFingerprintDetector(BaseDetector):
         self,
         probe_results: Optional[Dict[str, Dict[str, Any]]] = None,
         reference_probe_results: Optional[Dict[str, Dict[str, Any]]] = None,
+        target_artifact: str = "MODEL",
         **kwargs
     ) -> DetectorResult:
         start_t = time.time()
@@ -67,7 +68,7 @@ class BehavioralFingerprintDetector(BaseDetector):
                 detector_id=self.detector_id,
                 detector_version=self.detector_version,
                 status=DetectorStatus.NOT_AVAILABLE,
-                limitations="Probe evaluation results not provided. Black-box inference execution required.",
+                limitations=["Probe evaluation results not provided. Black-box inference execution required."],
                 execution_time_ms=(time.time() - start_t) * 1000
             )
 
@@ -82,21 +83,31 @@ class BehavioralFingerprintDetector(BaseDetector):
             trig_conf = trigger_resp.get("confidence", 0.0)
             if trig_class != clean_class and trig_conf > 0.85:
                 findings.append(DetectorFinding(
+                    detector_id=self.detector_id,
                     finding_type="TRIGGER_SUSCEPTIBILITY_DEVIATION",
                     severity="HIGH",
+                    target_artifact=target_artifact,
+                    evidence_type="BEHAVIORAL",
                     confidence=0.91,
+                    deterministic=False,
                     explanation=f"A localized corner patch induced an immediate class flip from '{clean_class}' to '{trig_class}' with high confidence ({trig_conf*100:.1f}%). Matches Trojan / Backdoor behavioral signature.",
                     observation=f"Clean: '{clean_class}' ({clean_conf:.2f}) -> Trigger: '{trig_class}' ({trig_conf:.2f})",
+                    observations={
+                        "clean_prediction": {"class": clean_class, "confidence": clean_conf},
+                        "trigger_prediction": {"class": trig_class, "confidence": trig_conf},
+                        "behavioral_shift": "CLASS_INVERSION"
+                    },
                     measurement={
                         "clean_class": clean_class,
                         "clean_confidence": clean_conf,
                         "trigger_class": trig_class,
                         "trigger_confidence": trig_conf,
                         "trigger_test": "PASSED_FLIP"
-                    }
+                    },
+                    limitations=["Evaluated using synthetic corner trigger geometry. Arbitrary triggers may require white-box gradient inversion."]
                 ))
 
-        # 2. General Robustness Stability against Reference Model
+        # 2. General Robustness Stability
         disagreement_count = 0
         total_probes = len(probe_results)
         for probe_name, resp in probe_results.items():
@@ -109,16 +120,22 @@ class BehavioralFingerprintDetector(BaseDetector):
         instability_ratio = disagreement_count / max(1, total_probes - 1)
         if instability_ratio > 0.6:
             findings.append(DetectorFinding(
+                detector_id=self.detector_id,
                 finding_type="BEHAVIORAL_INSTABILITY_HIGH",
                 severity="MEDIUM",
+                target_artifact=target_artifact,
+                evidence_type="BEHAVIORAL",
                 confidence=0.85,
+                deterministic=False,
                 explanation=f"Model demonstrated extreme perturbation fragility: {disagreement_count}/{total_probes-1} standard probes ({instability_ratio*100:.1f}%) resulted in prediction label changes.",
-                observation=f"Fragility observed under basic environmental perturbations (blur, contrast, brightness).",
+                observation="Fragility observed under basic environmental perturbations (blur, contrast, brightness).",
+                observations={"disagreements": disagreement_count, "probes_tested": total_probes, "instability_ratio": round(instability_ratio, 3)},
                 measurement={
                     "probes_tested": total_probes,
                     "disagreements": disagreement_count,
                     "instability_ratio": round(instability_ratio, 3)
-                }
+                },
+                limitations=["Standard black-box perturbation battery. Does not evaluate physical adversarial patch angles."]
             ))
 
         status = DetectorStatus.FINDING if findings else DetectorStatus.PASS
@@ -128,6 +145,6 @@ class BehavioralFingerprintDetector(BaseDetector):
             detector_version=self.detector_version,
             status=status,
             findings=findings,
-            limitations="Black-box probe evaluation without internal layer weights. Trojan triggers outside test battery geometry may remain undetected.",
+            limitations=["Black-box probe evaluation without internal layer weights. Trojan triggers outside test battery geometry may remain undetected."],
             execution_time_ms=(time.time() - start_t) * 1000
         )

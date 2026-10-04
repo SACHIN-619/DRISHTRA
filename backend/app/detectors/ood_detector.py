@@ -31,7 +31,7 @@ class OutOfDistributionDetector(BaseDetector):
                 detector_id=self.detector_id,
                 detector_version=self.detector_version,
                 status=DetectorStatus.NOT_AVAILABLE,
-                limitations="Feature embeddings unavailable. Black-box extraction required or feature extractor offline.",
+                limitations=["Feature embeddings unavailable. Black-box extraction required or feature extractor offline."],
                 execution_time_ms=(time.time() - start_t) * 1000
             )
 
@@ -40,7 +40,7 @@ class OutOfDistributionDetector(BaseDetector):
                 detector_id=self.detector_id,
                 detector_version=self.detector_version,
                 status=DetectorStatus.NOT_AVAILABLE,
-                limitations="No certified in-distribution baseline reference profile provided for comparison.",
+                limitations=["No certified in-distribution baseline reference profile provided for comparison."],
                 execution_time_ms=(time.time() - start_t) * 1000
             )
 
@@ -87,6 +87,6 @@ class OutOfDistributionDetector(BaseDetector):
             detector_version=self.detector_version,
             status=status,
             findings=findings,
-            limitations="Assumes representation space preserves semantic geometry. Linear Gaussian envelope assumptions applied.",
+            limitations=["Assumes representation space preserves semantic geometry. Linear Gaussian envelope assumptions applied."],
             execution_time_ms=(time.time() - start_t) * 1000
         )

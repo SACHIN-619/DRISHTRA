@@ -2,11 +2,16 @@
 DRISHTRA Detector Framework - Base Interface
 Standardized interface for all computer vision, model, and inference integrity detectors.
 Every detector declares its access assumptions, execution status, and explicit limitations.
+All findings adhere to the standardized evidence contract.
 """
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from enum import Enum
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from datetime import datetime, timezone
+
+def utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
 
 class DetectorStatus(str, Enum):
     PASS = "PASS"
@@ -22,21 +27,29 @@ class AccessRequirement(str, Enum):
     WHITE_BOX = "WHITE_BOX"
 
 class DetectorFinding(BaseModel):
+    finding_id: Optional[str] = None
+    detector_id: Optional[str] = None
     finding_type: str
-    severity: str # CRITICAL, HIGH, MEDIUM, LOW, INFO
-    confidence: float
+    severity: str = "MEDIUM" # CRITICAL, HIGH, MEDIUM, LOW, INFO
+    target_artifact: Optional[str] = None
+    evidence_type: str = "CRYPTOGRAPHIC" # CRYPTOGRAPHIC, STATISTICAL, BEHAVIORAL, METADATA
+    confidence: Optional[float] = None # None for deterministic checks
+    deterministic: bool = False
     explanation: str
-    limitations: Optional[str] = None
     observation: str
+    observations: Dict[str, Any] = {}
     measurement: Dict[str, Any] = {}
     supporting_artifact: Optional[str] = None
+    artifact_digest: Optional[str] = None
+    limitations: List[str] = []
+    created_at: str = Field(default_factory=utc_now_iso)
 
 class DetectorResult(BaseModel):
     detector_id: str
     detector_version: str
     status: DetectorStatus
     findings: List[DetectorFinding] = []
-    limitations: Optional[str] = None
+    limitations: List[str] = []
     execution_time_ms: float = 0.0
 
 class BaseDetector(ABC):

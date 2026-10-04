@@ -1,8 +1,9 @@
 """
-DRISHTRA Operational Shift Sentinel - Distribution Shift & Environmental Drift Detector
+DRISHTRA Operational Shift Sentinel - Distribution Shift & Environmental Drift Detector (D5)
 Differentiates between:
 1. OPERATIONAL_DRIFT (Benign atmospheric, seasonal, terrain, sensor, or illumination variations)
 2. MALICIOUS_MANIPULATION (Adversarial high-frequency noise, synthetic pixel anomalies, trigger overlays)
+Standardized evidence contract.
 """
 import time
 from typing import Dict, Any, List, Optional
@@ -17,9 +18,10 @@ class DistributionShiftDetector(BaseDetector):
 
     def run(
         self,
-        current_metrics: Dict[str, float], # brightness, contrast, blur_metric, noise_metric, color_entropy
-        reference_profile: Optional[Dict[str, Dict[str, float]]] = None, # mean, std per metric
-        metadata: Optional[Dict[str, Any]] = None, # sensor_type, terrain, illumination, time_of_day
+        current_metrics: Dict[str, float], # brightness, contrast, blur_metric, noise_metric
+        reference_profile: Optional[Dict[str, Dict[str, float]]] = None,
+        metadata: Optional[Dict[str, Any]] = None,
+        target_artifact: str = "DATASET",
         **kwargs
     ) -> DetectorResult:
         start_t = time.time()
@@ -30,11 +32,10 @@ class DistributionShiftDetector(BaseDetector):
                 detector_id=self.detector_id,
                 detector_version=self.detector_version,
                 status=DetectorStatus.NOT_AVAILABLE,
-                limitations="Operational image metrics not provided for shift evaluation.",
+                limitations=["Operational image metrics not provided for shift evaluation."],
                 execution_time_ms=(time.time() - start_t) * 1000
             )
 
-        # Default standard daytime surveillance profile if reference not provided
         ref = reference_profile or {
             "brightness": {"mean": 128.0, "std": 35.0},
             "contrast": {"mean": 55.0, "std": 15.0},
@@ -50,7 +51,7 @@ class DistributionShiftDetector(BaseDetector):
                 m_std = max(1e-4, ref[metric]["std"])
                 z = (val - m_mean) / m_std
                 z_scores[metric] = z
-                if abs(z) > 2.5: # 2.5 sigma deviation
+                if abs(z) > 2.5:
                     anomalous_metrics.append((metric, val, z))
 
         sensor = metadata.get("sensor", "UNKNOWN") if metadata else "UNKNOWN"
@@ -58,7 +59,6 @@ class DistributionShiftDetector(BaseDetector):
         terrain = metadata.get("terrain", "PLAINS") if metadata else "PLAINS"
 
         if anomalous_metrics:
-            # Check if shifts correlate with declared operational metadata (e.g. night illumination explains low brightness)
             is_benign_drift = False
             drift_reasons = []
 
@@ -70,34 +70,51 @@ class DistributionShiftDetector(BaseDetector):
                     is_benign_drift = True
                     drift_reasons.append(f"Blur metric consistent with reported weather condition '{metadata.get('weather')}'")
 
-            # Check for high-frequency noise anomaly without natural environmental justification
             noise_z = z_scores.get("noise_metric", 0.0)
             if noise_z > 3.5 and not is_benign_drift:
                 findings.append(DetectorFinding(
+                    detector_id=self.detector_id,
                     finding_type="SUSPICIOUS_HIGH_FREQUENCY_ANOMALY",
                     severity="HIGH",
+                    target_artifact=target_artifact,
+                    evidence_type="STATISTICAL",
                     confidence=0.87,
+                    deterministic=False,
                     explanation=f"Observed abnormal high-frequency noise perturbation (z={noise_z:.2f}) incompatible with natural sensor degradation. Possible adversarial perturbation.",
                     observation=f"Sensor '{sensor}', Terrain '{terrain}'. Noise metric {current_metrics.get('noise_metric'):.2f} exceeds operational bounds.",
-                    measurement={"z_scores": {k: round(v, 2) for k, v in z_scores.items()}, "classification": "INTEGRITY_CONCERN"}
+                    observations={"z_scores": {k: round(v, 2) for k, v in z_scores.items()}, "classification": "INTEGRITY_CONCERN"},
+                    measurement={"z_scores": {k: round(v, 2) for k, v in z_scores.items()}, "classification": "INTEGRITY_CONCERN"},
+                    limitations=["Statistical deviation from reference Gaussian prior. Does not perform gradient reconstruction."]
                 ))
             elif is_benign_drift:
                 findings.append(DetectorFinding(
+                    detector_id=self.detector_id,
                     finding_type="OPERATIONAL_ENVIRONMENTAL_DRIFT",
                     severity="LOW",
+                    target_artifact=target_artifact,
+                    evidence_type="METADATA",
                     confidence=0.92,
+                    deterministic=False,
                     explanation=f"Material distribution shift detected ({len(anomalous_metrics)} metrics out of baseline bounds) but correlated with declared operational factors: {'; '.join(drift_reasons)}.",
                     observation=f"Distribution shift accounted for by operational environment ({illum}, {terrain}, {sensor}).",
-                    measurement={"z_scores": {k: round(v, 2) for k, v in z_scores.items()}, "classification": "OPERATIONAL_DRIFT"}
+                    observations={"drift_reasons": drift_reasons, "z_scores": {k: round(v, 2) for k, v in z_scores.items()}},
+                    measurement={"z_scores": {k: round(v, 2) for k, v in z_scores.items()}, "classification": "OPERATIONAL_DRIFT"},
+                    limitations=["Relies on telemetry honesty in declared metadata."]
                 ))
             else:
                 findings.append(DetectorFinding(
+                    detector_id=self.detector_id,
                     finding_type="UNACCOUNTED_DISTRIBUTION_SHIFT",
                     severity="MEDIUM",
+                    target_artifact=target_artifact,
+                    evidence_type="STATISTICAL",
                     confidence=0.82,
+                    deterministic=False,
                     explanation=f"Observed significant optical shift across {len(anomalous_metrics)} dimension(s) without matching environmental metadata.",
                     observation=f"Unmatched metrics: {[m[0] for m in anomalous_metrics]}",
-                    measurement={"z_scores": {k: round(v, 2) for k, v in z_scores.items()}, "classification": "UNACCOUNTED_SHIFT"}
+                    observations={"unmatched_metrics": [m[0] for m in anomalous_metrics]},
+                    measurement={"z_scores": {k: round(v, 2) for k, v in z_scores.items()}, "classification": "UNACCOUNTED_SHIFT"},
+                    limitations=["Reference profile assumed calibrated to daytime clear conditions."]
                 ))
 
             status = DetectorStatus.FINDING
@@ -109,6 +126,6 @@ class DistributionShiftDetector(BaseDetector):
             detector_version=self.detector_version,
             status=status,
             findings=findings,
-            limitations="Relies on declared operational sensor metadata and empirical image statistics. Unregistered optical conditions may mimic drift.",
+            limitations=["Relies on declared operational sensor metadata and empirical image statistics. Unregistered optical conditions may mimic drift."],
             execution_time_ms=(time.time() - start_t) * 1000
         )

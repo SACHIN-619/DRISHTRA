@@ -1,0 +1,21 @@
+DRISHTRA (Digital Reliability & Integrity Shield for Trusted AI) is a cross-lifecycle AI assurance fabric that makes multi-contributor computer-vision supply chains continuously verifiable, traceable and auditable.
+
+In modern AI pipelines, datasets, models, runtimes and inference outputs often come from different labs, vendors and field units. Existing controls — integrity hashes, provenance records, dataset scanners, adversarial tests and output signatures — are valuable but fragmented. A verified model hash, for example, says nothing about the data the model was trained on or whether a given output is authentic.
+
+DRISHTRA connects the whole chain:
+
+Contributor -> Dataset -> Model -> Runtime -> Inference -> Assurance Case
+
+It binds every artifact to a cryptographic identity, then runs an 18-stage chained pipeline in which each stage must consume the previous stage's exact output. The pipeline executes dataset, model-integrity, behavioural and inference-authenticity checks and records every result: pass, finding, not tested or inconclusive. Instead of treating each alert in isolation, DRISHTRA correlates findings across lifecycle boundaries and detects when independent evidence paths converge on the same contributor.
+
+The result is a coverage-aware Assurance Case. It contains supporting evidence, counter-evidence, untested dimensions and declared limitations, together with a policy-based recommendation of ACCEPT, REVIEW or QUARANTINE. Missing evidence is never treated as safe. Any flagged output can be traced upstream through runtime, model and dataset to its contributor in one click.
+
+DRISHTRA keeps humans in command. Five role consoles enforce separation of duties on the server: analysts recommend, and only a reviewer can decide. Decisions are Ed25519-signed, and every case, decision and platform event is stored in a hash-chained ledger that an auditor can independently verify, so any later edit is detected.
+
+A working offline prototype demonstrates the full flow: the live 18-stage pipeline; an Attack Lab where poisoned data, swapped weights, a backdoor, a tampered output and a replayed record are each caught by the stage that owns the check; signed human decisions; and audit verification. It runs fully air-gapped on one host and is verified by 83 automated tests and a 19-step end-to-end demo. All data is public or synthetic, and no classified or operational data is used.
+
+DRISHTRA does not reinvent hashing, signatures or Trojan detection. Its contribution is integrating them into one lifecycle-level workflow:
+
+VERIFY -> CORRELATE -> TRACE -> ASSURE -> AUDIT
+
+Future work extends the same evidence model to video, thermal and SAR/radar pipelines, hardware-backed keys, enterprise identity and authorised institutional integration, moving AI security from isolated checks to evidence-driven, cross-lifecycle assurance.

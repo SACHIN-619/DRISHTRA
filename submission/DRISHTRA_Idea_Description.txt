@@ -1,0 +1,311 @@
+DRISHTRA — Cross-Lifecycle Evidence Assurance for Trusted AI Supply Chains
+(Digital Reliability & Integrity Shield for Trusted AI · SIH 2026 · PS 26228 · Team HackHawks405)
+
+WORKING PROTOTYPE AT A GLANCE
+- Live demo: <paste Vercel link>   ·   3-minute demo video: <paste YouTube link>
+- An 18-stage chained assurance pipeline: every stage records the digest of what it consumed, and that digest must match the previous stage's output.
+- 12 catalogued checks across data, model and inference (11 active; white-box trigger reconstruction is declared out of scope rather than silently skipped).
+- A live Attack Lab: poisoned training data, swapped model weights, a planted backdoor, an output altered after signing and a replayed signed record. Each attack is caught by the stage that owns that check, and the verdict changes accordingly.
+- Five role consoles with server-enforced separation of duties, Ed25519-signed decisions and three tamper-evident hash-chained ledgers.
+- Runs fully offline on one host (no cloud, CDN or external API required), verified by 83 automated tests, a 19-step end-to-end golden demo and a 12-step browser test.
+
+
+1. PROBLEM AND MOTIVATION
+
+Computer-vision systems in security-sensitive settings increasingly depend on multi-contributor supply chains: datasets, models, runtimes and inference services may each come from a different lab, vendor, subcontractor or field unit.
+
+Integrity checks today are usually performed at isolated points. A dataset is scanned for anomalies, a model is hashed or probed, and an inference is checked for authenticity. Each check answers a narrow question, and the findings are hard to combine into one continuous assurance story:
+
+- A clean model hash does not establish that its training data was trustworthy.
+- A provenance record establishes origin, not behavioural safety.
+- A model-level test may reveal suspicious behaviour without showing which upstream contributor introduced it.
+- A valid inference signature proves who produced an output, not that the model and data behind it were sound.
+
+DRISHTRA closes this gap by connecting the whole lifecycle into one evidence chain:
+
+Contributor -> Dataset -> Model -> Runtime -> Inference -> Assurance Case
+
+DRISHTRA does not replace established security, provenance or AI-testing techniques. It combines their evidence into a traceable assurance workflow in which supporting evidence, counter-evidence, test coverage and untested dimensions all stay visible. It is designed for restricted and air-gapped environments where cloud dependency is undesirable or impossible.
+
+
+2. PROPOSED SOLUTION
+
+DRISHTRA is an AI assurance fabric that turns isolated integrity, provenance, dataset, behavioural and inference checks into a machine-verifiable Assurance Case.
+
+For every asset and inference it:
+- establishes a cryptographically bound identity,
+- runs the applicable checks and records every execution, whether it passed, found something, or could not be tested,
+- correlates the evidence across lifecycle boundaries, and
+- produces an auditable recommendation that an authorised human must confirm.
+
+Assurance outcomes:
+- ACCEPT: the evidence satisfies the assurance policy.
+- REVIEW: the evidence is mixed or incomplete, or needs human judgement.
+- QUARANTINE: the policy conditions say the artifact or inference must not be trusted operationally.
+- NOT TESTED / INCONCLUSIVE: a dimension was not (sufficiently) evaluated. It is never silently treated as safe.
+
+Absence of evidence is never represented as evidence of safety.
+
+
+3. CORE WORKFLOW — THE 18-STAGE CHAINED PIPELINE
+
+INGEST & BIND -> VERIFY & TEST -> CORRELATE -> ASSURE -> SEAL
+
+The prototype runs these as 18 chained stages:
+- Intake: case validation, contributor verification.
+- Data: ingestion, normalisation, integrity scan.
+- Model: registration, identity and digest check, behavioural probes.
+- Runtime & inference: configuration binding, attestation ingestion, signature and replay verification.
+- Correlate: evidence normalisation, cross-lifecycle correlation, counter-evidence evaluation.
+- Assure: assurance case construction.
+- Seal: audit ledger commitment, report generation, completion and coverage export.
+
+Every stage reads only stored artifacts, records the digest of its input and output, and reports SUCCESS, SKIPPED or FAILED. A stage with nothing to work on says SKIPPED, never SUCCESS. If a stage fails, the run halts honestly and no verdict is manufactured. The run is streamed live to the console, so a reviewer can watch each stage report.
+
+3.1 INGEST & BIND
+Untrusted files cross a trust boundary that checks type, size and path traversal and computes a SHA-256 fingerprint. COCO and YOLO datasets (JSON, or archives with images) are parsed into canonical records; when images are present, pixel-level and perceptual hashes are computed. Model artifacts, runtime configurations, contributor records and signed inference attestations are bound to their recorded identities, so any later change is detectable.
+
+3.2 VERIFY & TEST
+Checks run deterministically according to artifact type and access level:
+- Data: exact duplicates, near-duplicates, label consistency, class balance, distribution shift, annotation validity, out-of-distribution samples.
+- Model: weight-digest verification (delivered vs registered), black-box behavioural/Trojan probes (e.g. a corner trigger patch flipping the predicted class), and white-box analysis declared out of scope for this prototype.
+- Inference: Ed25519 signature binding, replay and sequence checks, and binding of the output to the approved model.
+
+Detectors are modular plug-ins behind one evidence contract. A detector produces evidence; it never decides.
+
+3.3 CORRELATE — LIFECYCLE EVIDENCE CONVERGENCE (the central mechanism)
+Findings are attached to the artifact, the lifecycle stage, the contributor lineage and the downstream inferences. Instead of three unrelated alerts (a dataset anomaly, a model anomaly, an inference anomaly), DRISHTRA asks whether independent evidence paths converge on the same contributor or asset:
+
+Dataset finding + Model behavioural finding + Inference authenticity finding
+-> independent evidence paths
+-> same contributor implicated
+-> stronger assurance concern
+
+Positive evidence is kept as well. For example, "model digest verified + valid signature + no replay" is recorded as counter-evidence in the Assurance Case, so DRISHTRA preserves the arguments both for and against trust.
+
+3.4 ASSURE
+The policy engine (DRISHTRA-AP-2026.2, rules R1-R6) evaluates the correlated evidence. For example, any CRITICAL finding leads to QUARANTINE, and convergence plus a HIGH finding also leads to QUARANTINE. The engine also assesses whether a distribution shift looks like operational drift or manipulation.
+
+The Assurance Case contains:
+- the claim
+- supporting evidence and counter-evidence
+- every check execution and its outcome
+- coverage per dimension
+- declared limitations
+- the applicable policy and the machine recommendation
+- the human decision
+- the audit history
+
+It is an evidence package, not a bare score.
+
+
+4. CROSS-LIFECYCLE EVIDENCE MODEL AND TRACEABILITY
+
+The core representation is a lifecycle evidence graph:
+
+Contributor -> Dataset -> Model -> Runtime -> Inference -> Assurance Case
+
+Each edge carries provenance, identifiers, verification results and evidence references, and every finding is traceable through the chain:
+
+Assurance Case -> Finding -> Evidence -> Artifact -> Lifecycle stage -> Contributor
+
+A reviewer can answer:
+- Which contributor supplied this artifact?
+- Which dataset trained this model?
+- Has the model changed since it was verified?
+- Which tests actually ran?
+- Which evidence caused the alert?
+- What argues against it?
+- What remains untested?
+
+In the prototype, the "Why?" view and reverse-lineage view trace a tampered inference back through runtime, model and dataset to the contributor in one click. Every asset also carries a signed assurance passport.
+
+
+5. ASSURANCE STATES
+
+DRISHTRA deliberately avoids a binary SAFE/UNSAFE answer.
+
+Case-level states:
+- ACCEPT (verified)
+- REVIEW (review required)
+- QUARANTINE (quarantine recommended)
+- INCONCLUSIVE
+
+Check-level outcomes:
+- PASS
+- FINDING
+- NOT TESTED
+- INCONCLUSIVE
+- NOT APPLICABLE
+
+Coverage is computed from the checks that actually executed, and NOT TESTED never counts as a pass. This prevents a common failure of automated assurance: silently turning missing tests into positive trust.
+
+
+6. EVIDENCE AND COUNTER-EVIDENCE
+
+Concerning evidence (examples):
+- fingerprint mismatch
+- duplicate flooding
+- label conflict
+- out-of-distribution insertion
+- trigger-sensitive behaviour
+- invalid inference signature
+- nonce replay
+
+Counter-evidence (examples):
+- independently verified model digest
+- consistent annotations
+- valid signatures
+- fresh nonces
+- clean behavioural probes on a flagged asset
+
+Both are kept in the Assurance Case instead of being collapsed into one opaque score.
+
+
+7. HUMAN-GOVERNED DECISIONS AND ROLE SEPARATION (implemented)
+
+DRISHTRA is a decision-support system, not an autonomous authority. The machine recommends; a human decides.
+
+Five server-enforced roles, each with its own console:
+- ML Analyst: ingest assets, run the pipeline.
+- Security Analyst: investigate, correlate, recommend.
+- Reviewer / Supervisor: make the binding decision.
+- Auditor: verify every chain; read-only.
+- Administrator: manage users and platform health.
+
+Separation of duties is enforced by the server, not the user interface:
+- Analysts can only recommend.
+- Only a Reviewer can decide, and never on a case they initiated.
+- The Administrator cannot decide, edit findings or rewrite history.
+- Roles are re-read from the database on every request.
+- Accounts are created only by the Administrator and must change their password at first login.
+- Failed logins trigger lockout, and sessions can be revoked.
+
+
+8. TAMPER-EVIDENT AUDIT
+
+Three hash-chained ledgers are kept:
+- a per-case audit ledger,
+- a signed decision chain,
+- a platform governance ledger for identity and authorisation events.
+
+Each record includes the previous record's hash:
+
+Record N-1 hash -> Record N -> Record N+1
+
+Decisions and passports are signed with the node's Ed25519 key. The Auditor console recomputes every chain independently. Modifying any past record breaks verification from that point onward.
+
+
+9. OFFLINE / AIR-GAPPED OPERATION
+
+The core workflow needs no external cloud, CDN or AI API:
+- It runs as a single process on one host with a local SQLite vault.
+- The console ships with its own fonts and assets and runs under a strict Content-Security-Policy.
+- A test fails the build if the demo pipeline opens any outbound connection.
+
+PostgreSQL and an optional external text explainer are supported for non-sensitive deployments. They are off by default and no verdict depends on them. When the database is remote, the system honestly reports itself as not air-gapped.
+
+
+10. SECURITY FOUNDATION
+
+DRISHTRA uses established cryptography rather than inventing new cryptography:
+- SHA-256 fingerprints
+- canonical JSON
+- Ed25519 signatures
+- hash-linked records
+- nonce-based inference verification
+- PBKDF2-SHA256 password hashing
+- per-install secrets
+
+The novelty is how these controls are combined with lifecycle evidence correlation and assurance-case generation.
+
+
+11. PROTOTYPE AND VALIDATION
+
+The prototype demonstrates the full flow end to end on labelled synthetic and controlled data:
+- ingestion
+- binding
+- the 18-stage pipeline
+- correlation and convergence
+- policy-based assurance
+- the Why? and lineage views
+- signed passports
+- recommend and decide
+- audit verification
+
+The Attack Lab sandbox lets anyone inject attacks into a clean, signed release and watch the pipeline find them. It covers five attacks:
+- poisoned data
+- swapped weights
+- a trigger backdoor
+- an output altered after signing
+- a replayed record
+
+The pipeline is not told what changed. Each attack is caught by the stage that owns that check (stage 05, 07, 08 or 11), layered attacks converge on the responsible contributor, and a reset restores the clean ACCEPT state.
+
+Validation:
+- 83 automated tests cover RBAC and separation of duties, token expiry/forgery/revocation, the upload trust boundary, stage chaining and honest failure, mutation propagation, every Attack Lab scenario and ledger tampering.
+- A 19-step golden demo runs through the real API.
+- A browser end-to-end test covers the governed flow.
+
+The evaluation harness reports precision, recall and false-positive/false-negative rates on controlled synthetic scenarios. These results validate the mechanism; they are not claims about real-world detection rates.
+
+
+12. DATA STRATEGY
+
+The project uses no classified, operational or service-generated data. Development and evaluation use public benchmarks (e.g. NIST TrojAI, BackdoorBench, COCO subsets, IISc UVH-26), synthetic contributors and lifecycle metadata, and controlled mutations with known ground truth. Institutional deployment would require authorised datasets, security review and organisation-specific policies.
+
+
+13. ROADMAP
+
+Phase 1 — Hardening:
+- broader detector library
+- richer evidence schemas
+- more reproducible attack simulations
+- policy configuration UI
+- deployment packaging
+
+Phase 2 — Multimodal assurance (same evidence model, new detectors):
+- video
+- thermal
+- SAR/radar
+- multimodal and sensor-fusion pipelines
+
+Phase 3 — Enterprise / air-gapped deployment:
+- containerised deployment
+- local identity management (LDAP/AD, smart card, MFA)
+- hardware-backed keys (HSM/TPM)
+- secure artifact repositories
+- offline update packages
+- centralised audit within the secure network
+
+Phase 4 — Authorised institutional integration through governed adapters:
+
+Existing AI systems -> DRISHTRA assurance layer -> Evidence + Assurance Case -> Authorised operational workflow
+
+No replacement of existing AI systems is required.
+
+
+14. EXPECTED IMPACT
+
+- Cross-lifecycle traceability from any suspicious output back to its source.
+- Faster forensic investigation through the evidence graph instead of manual reconstruction.
+- Explicit assurance gaps instead of false confidence.
+- Evidence-based, accountable human decisions.
+- Tamper-evident history.
+- Reproducible security testing.
+- Offline operation for restricted environments.
+- A reusable assurance architecture across AI systems.
+
+
+15. WHAT MAKES DRISHTRA DISTINCT
+
+DRISHTRA does not claim to invent hashing, signatures, provenance, Trojan detection or dataset analysis. Its contribution is the integrated assurance architecture:
+
+Heterogeneous artifacts -> cryptographic binding -> verification and testing -> cross-lifecycle correlation -> evidence + counter-evidence -> coverage-aware Assurance Case -> human decision -> tamper-evident audit
+
+"From isolated AI-security findings to cross-lifecycle, evidence-driven assurance."
+
+
+16. PROTOTYPE BOUNDARY
+
+This is a technical demonstration on controlled, public and synthetic data. It is not a certified military product and makes no claim of operational deployment. The current scope is COCO/YOLO datasets, ONNX/PyTorch models with black-box behavioural probes, and signed inference attestations. White-box trigger reconstruction, SAR/thermal modalities, physical adversarial patches and adaptive attackers are declared out of scope, both here and inside the product. Any defence deployment would require institutional authorisation, security certification, domain-specific validation and appropriate governance.

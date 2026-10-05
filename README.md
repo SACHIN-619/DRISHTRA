@@ -186,7 +186,8 @@ docker compose up --build          # one container on :8000, vault persisted in 
 ```
 
 - **Docker:** the root `Dockerfile` installs the backend and ships the prebuilt console (`web/dist`). Set `SECRET_KEY` in the environment, or leave it empty and the container generates a per-install secret in the vault.
-- **Render:** `render.yaml` runs the same app natively (`PYTHONPATH=backend uvicorn app.main:app`) with a generated `SECRET_KEY`.
+- **Render (backend + console):** `render.yaml` runs the same app natively (`PYTHONPATH=backend uvicorn app.main:app`) in Singapore, with Python 3.11 and a generated `SECRET_KEY`. The free tier sleeps after 15 idle minutes and takes about a minute to wake, and its disk resets on restart (demo mode simply reseeds).
+- **Vercel (public URL for the console):** import the repo in Vercel with **Root Directory = `web`**. `web/vercel.json` builds the console and proxies `/api/*` and `/health` to the Render backend, so the browser stays same-origin. Replace `YOUR-RENDER-SERVICE` in `web/vercel.json` with your Render hostname first. The backend cannot run on Vercel functions, because it needs a persistent disk for keys, ledgers and stored assessment inputs.
 - For anything beyond a demo, set `DEMO_MODE=false` and `BOOTSTRAP_ADMIN_PASSWORD`, and keep `storage/` on persistent disk. It holds the keys and ledgers.
 
 ## Scope and limitations (declared, also shown in the product)

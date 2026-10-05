@@ -8,11 +8,16 @@ services:
   - type: web
     name: drishtra-assurance-fabric
     runtime: python
-    region: oregon
+    region: singapore   # closest Render region to India
     plan: free
     buildCommand: "pip install -r requirements.txt"
     startCommand: "PYTHONPATH=backend uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+    healthCheckPath: /health
     envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: DEMO_MODE
+        value: "true"
       - key: ENVIRONMENT
         value: render-demo
       - key: IS_AIR_GAPPED

@@ -3,7 +3,7 @@ DRISHTRA - Digital Reliability & Integrity Shield for Trusted AI
 Core Configuration and Settings
 """
 import os
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Union
 from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
@@ -66,7 +66,7 @@ class Settings(BaseSettings):
     
     # CORS
     # Supports comma-separated origins, JSON arrays, or wildcard via env var CORS_ORIGINS
-    CORS_ORIGINS: List[str] = [
+    CORS_ORIGINS: Union[str, List[str]] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
@@ -77,10 +77,21 @@ class Settings(BaseSettings):
     @classmethod
     def assemble_cors_origins(cls, v: Any) -> List[str]:
         if isinstance(v, str):
-            if v.startswith("[") and v.endswith("]"):
+            v_str = v.strip()
+            if not v_str:
+                return [
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "http://localhost:3000",
+                    "http://127.0.0.1:3000",
+                ]
+            if v_str.startswith("[") and v_str.endswith("]"):
                 import json
-                return json.loads(v)
-            return [i.strip() for i in v.split(",") if i.strip()]
+                try:
+                    return json.loads(v_str)
+                except Exception:
+                    pass
+            return [i.strip() for i in v_str.split(",") if i.strip()]
         elif isinstance(v, list):
             return v
         return []

@@ -22,7 +22,10 @@ const options = {
   loader: { ".css": "css" },
   external: ["/fonts/*", "/media/*"],
   nodePaths: process.env.NODE_PATH ? process.env.NODE_PATH.split(":") : [],
-  define: { "process.env.NODE_ENV": JSON.stringify(watch ? "development" : "production") },
+  define: {
+    "process.env.NODE_ENV": JSON.stringify(watch ? "development" : "production"),
+    "import.meta.env.VITE_API_BASE_URL": JSON.stringify(process.env.VITE_API_BASE_URL || ""),
+  },
   logLevel: "info",
 };
 

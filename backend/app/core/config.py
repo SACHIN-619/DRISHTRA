@@ -3,7 +3,8 @@ DRISHTRA - Digital Reliability & Integrity Shield for Trusted AI
 Core Configuration and Settings
 """
 import os
-from typing import List, Optional
+from typing import Any, List, Optional
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 class Settings(BaseSettings):
@@ -64,14 +65,26 @@ class Settings(BaseSettings):
     MAX_RECORDS_PER_REQUEST: int = int(os.getenv("MAX_RECORDS_PER_REQUEST", 5000))
     
     # CORS
-    # The UI is served by this same process, so CORS is only needed for local
-    # frontend development servers. No wildcard.
+    # Supports comma-separated origins, JSON arrays, or wildcard via env var CORS_ORIGINS
     CORS_ORIGINS: List[str] = [
         "http://localhost:5173",
         "http://127.0.0.1:5173",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def assemble_cors_origins(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            if v.startswith("[") and v.endswith("]"):
+                import json
+                return json.loads(v)
+            return [i.strip() for i in v.split(",") if i.strip()]
+        elif isinstance(v, list):
+            return v
+        return []
+
     
     model_config = {
         "env_file": (".env", "../.env"),
